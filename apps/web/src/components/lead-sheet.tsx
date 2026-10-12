@@ -16,6 +16,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
+interface EmailThread {
+  messages: {
+    id: string;
+    direction: "OUT" | "IN";
+    toEmail: string;
+    status: string;
+    sentAt: string | null;
+    body: string | null;
+    draft: { subject: string; step: number } | null;
+    events: { type: string; occurredAt: string }[];
+  }[];
+  drafts: { id: string; subject: string; step: number; status: string; lastError: string | null }[];
+}
+
 export function LeadSheet({
   leadId,
   onClose,
@@ -29,6 +43,7 @@ export function LeadSheet({
   const [note, setNote] = useState("");
   // Pending status change that needs extra input (reason / project details).
   const [pending, setPending] = useState<string | null>(null);
+  const [emails, setEmails] = useState<EmailThread | null>(null);
   const [reason, setReason] = useState("");
   const [project, setProject] = useState({ name: "", value: "", notes: "", expectedStart: "" });
 
@@ -41,10 +56,44 @@ export function LeadSheet({
     }
   }, [leadId]);
 
+  const loadEmails = useCallback(async () => {
+    if (!leadId) return;
+    try {
+      setEmails(await api<EmailThread>(`/leads/${leadId}/emails`));
+    } catch {
+      setEmails(null);
+    }
+  }, [leadId]);
+
   useEffect(() => {
     setLead(null);
+    setEmails(null);
     load();
-  }, [load]);
+    loadEmails();
+  }, [load, loadEmails]);
+
+  async function logReply() {
+    try {
+      await api(`/leads/${leadId}/log-reply`, { method: "POST", json: {} });
+      toast.success("Reply logged; follow-ups stopped");
+      await Promise.all([load(), loadEmails()]);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not log reply");
+    }
+  }
+
+  async function eraseData() {
+    if (!confirm("Permanently erase this lead and all its data, and suppress its email addresses? This cannot be undone.")) return;
+    try {
+      await api(`/leads/${leadId}/data`, { method: "DELETE" });
+      toast.success("Lead erased");
+      onClose();
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erase failed");
+    }
+  }
 
   async function changeStatus(status: string, extra: Record<string, unknown> = {}) {
     try {
@@ -115,6 +164,7 @@ export function LeadSheet({
               <Tabs defaultValue="audit">
                 <TabsList>
                   <TabsTrigger value="audit">Audit &amp; score</TabsTrigger>
+                  <TabsTrigger value="emails">Emails</TabsTrigger>
                   <TabsTrigger value="checklist">Checklist</TabsTrigger>
                   <TabsTrigger value="timeline">Timeline</TabsTrigger>
                   <TabsTrigger value="notes">Notes</TabsTrigger>
@@ -175,6 +225,51 @@ export function LeadSheet({
                         No public email found. Needs manual outreach (phone / WhatsApp / DM).
                       </p>
                     )}
+                  </div>
+                </TabsContent>
+                <TabsContent value="emails" className="space-y-3">
+                  {!emails || (!emails.messages.length && !emails.drafts.length) ? (
+                    <p className="text-sm text-muted-foreground">No emails yet.</p>
+                  ) : (
+                    <>
+                      {emails.messages.map((m) => (
+                        <div key={m.id} className={`rounded-md border p-2 text-sm ${m.direction === "IN" ? "border-primary/50" : ""}`}>
+                          <div className="flex justify-between">
+                            <strong>{m.direction === "IN" ? "Reply received" : (m.draft?.subject ?? "Email")}</strong>
+                            <span className="text-xs text-muted-foreground">{m.sentAt ? new Date(m.sentAt).toLocaleString() : m.status}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {m.direction === "OUT" ? `to ${m.toEmail}` : `from ${m.toEmail}`}
+                            {m.draft && m.draft.step > 0 ? ` · follow-up ${m.draft.step}` : ""}
+                          </div>
+                          {m.body && <p className="mt-1 whitespace-pre-wrap text-xs">{m.body}</p>}
+                          {m.events.length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {m.events.map((ev, i) => (
+                                <Badge key={i} variant="outline">{ev.type.toLowerCase()}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {emails.drafts.map((d) => (
+                        <div key={d.id} className="rounded-md border border-dashed p-2 text-sm">
+                          <div className="flex justify-between">
+                            <span>{d.subject}</span>
+                            <Badge variant="secondary">{d.status.replace("_", " ").toLowerCase()}</Badge>
+                          </div>
+                          {d.lastError && <p className="text-xs text-muted-foreground">{d.lastError}</p>}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" variant="outline" onClick={logReply} disabled={!emails?.messages.some((m) => m.direction === "OUT")}>
+                      Log a reply
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={eraseData}>
+                      Erase lead data
+                    </Button>
                   </div>
                 </TabsContent>
                 <TabsContent value="checklist" className="space-y-2">

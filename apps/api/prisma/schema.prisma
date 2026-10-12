@@ -110,6 +110,7 @@ model Workspace {
   senderCompany     String?
   senderAddress     String?
   replyTo           String?
+  fromEmail         String?
   portfolioLink     String?
   timezone          String    @default("UTC")
   sendWindowStart   Int       @default(9)
@@ -445,6 +446,9 @@ model EmailDraft {
   aiGenerated       Boolean     @default(false)
   status            DraftStatus @default(PENDING_REVIEW)
   scheduledFor      DateTime?
+  attempts          Int         @default(0)
+  lastError         String?
+  nextAttemptAt     DateTime?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 

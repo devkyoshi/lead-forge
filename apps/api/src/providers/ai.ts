@@ -52,7 +52,10 @@ const TONE_GUIDE: Record<Tone, string> = {
 
 class AnthropicAiProvider implements AiProvider {
   readonly name = "anthropic";
-  private client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  private client: Anthropic;
+  constructor(apiKey: string) {
+    this.client = new Anthropic({ apiKey });
+  }
 
   async personalize({ tone, factSheet }: PersonalizeInput) {
     const response = await this.client.messages.create({
@@ -77,6 +80,8 @@ class AnthropicAiProvider implements AiProvider {
   }
 }
 
-export function createAiProvider(): AiProvider {
-  return env.AI_PROVIDER === "anthropic" ? new AnthropicAiProvider() : new MockAiProvider();
+export function createAiProvider(apiKey?: string): AiProvider {
+  if (env.AI_PROVIDER !== "anthropic") return new MockAiProvider();
+  if (!apiKey) throw new Error("Anthropic API key is not configured (Settings > API keys or ANTHROPIC_API_KEY)");
+  return new AnthropicAiProvider(apiKey);
 }

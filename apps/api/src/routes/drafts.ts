@@ -6,6 +6,7 @@ import { prisma } from "../db.js";
 import { generateDraft } from "../services/drafts.js";
 import { HttpError } from "../services/leads.js";
 import { isSuppressed } from "../services/suppression.js";
+import { requestDispatchNow } from "../queue.js";
 
 const idParam = z.object({ id: z.string().min(1) });
 const statusEnum = z.enum(["PENDING_REVIEW", "APPROVED", "REJECTED", "QUEUED", "SENT", "FAILED"]);
@@ -87,6 +88,7 @@ export const draftRoutes: FastifyPluginAsync = async (app) => {
           changed++;
         }
       }
+      if (req.body.action === "approve" && changed) await requestDispatchNow().catch(() => {});
       return { changed, skipped };
     },
   );

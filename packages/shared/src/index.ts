@@ -5,3 +5,4 @@ export * from "./scoring";
 export * from "./audit";
 export * from "./campaign";
 export * from "./template";
+export * from "./sending";

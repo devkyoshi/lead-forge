@@ -2,6 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { EMPTY_COUNTS, RUN_STAGES, type RunStage } from "@leadforge/shared";
 import { prisma } from "../db.js";
 import { createPlacesProvider, type PlacesProvider } from "../providers/places.js";
+import { createAiProvider } from "../providers/ai.js";
+import { resolveSecret } from "../lib/secrets.js";
 import { auditStage, discoverStage, draftStage, enrichStage, scoreStage, type StageCtx, type StageResult } from "./stages.js";
 import type { AiProvider } from "../providers/ai.js";
 
@@ -19,7 +21,7 @@ export async function executeRun(runId: string, deps: { places?: PlacesProvider;
   if (!run) throw new Error(`Run ${runId} not found`);
   if (run.status === "CANCELLED" || run.status === "COMPLETED") return;
 
-  const places = deps.places ?? createPlacesProvider();
+  const places = deps.places ?? createPlacesProvider(await resolveSecret(run.workspaceId, "GOOGLE_PLACES"));
   const campaign = run.campaign;
   await prisma.campaignRun.update({
     where: { id: runId },
@@ -31,7 +33,7 @@ export async function executeRun(runId: string, deps: { places?: PlacesProvider;
     audit: auditStage,
     enrich: enrichStage,
     score: scoreStage,
-    draft: (c) => draftStage(c, deps.ai),
+    draft: async (c) => draftStage(c, deps.ai ?? createAiProvider(await resolveSecret(c.workspaceId, "ANTHROPIC"))),
   };
   const counts: Record<string, number> = { ...EMPTY_COUNTS, ...(run.counts as Record<string, number>) };
 

@@ -2,7 +2,8 @@ import { Worker } from "bullmq";
 import pino from "pino";
 import "./env.js";
 import { prisma } from "./db.js";
-import { DEAD_LETTER_QUEUE, RUN_QUEUE, createRedis, getDeadLetterQueue, type RunJob } from "./queue.js";
+import { DEAD_LETTER_QUEUE, RUN_QUEUE, SEND_QUEUE, createRedis, ensureDispatcherSchedule, getDeadLetterQueue, type RunJob } from "./queue.js";
+import { dispatchAll } from "./services/sender.js";
 import { executeRun } from "./services/orchestrator.js";
 
 const log = pino({ name: "worker" });
@@ -27,8 +28,21 @@ worker.on("failed", async (job, err) => {
   }
 });
 
+const sendWorker = new Worker(
+  SEND_QUEUE,
+  async () => {
+    const results = await dispatchAll();
+    const sent = Object.values(results).reduce((n, r) => n + r.sent, 0);
+    if (sent || Object.values(results).some((r) => r.failed || r.followupsDrafted)) log.info({ results }, "dispatch tick");
+  },
+  { connection: createRedis(), concurrency: 1 },
+);
+sendWorker.on("failed", (job, err) => log.error({ jobId: job?.id, err: err.message }, "dispatch tick failed"));
+await ensureDispatcherSchedule();
+
 async function shutdown() {
   await worker.close();
+  await sendWorker.close();
   await prisma.$disconnect();
   process.exit(0);
 }

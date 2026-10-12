@@ -22,9 +22,13 @@ import { campaignRoutes } from "./routes/campaigns.js";
 import { mockSiteRoutes } from "./routes/mock-sites.js";
 import { templateRoutes } from "./routes/templates.js";
 import { draftRoutes } from "./routes/drafts.js";
+import { settingsRoutes } from "./routes/settings.js";
+import { sendingRoutes } from "./routes/sending.js";
+import { publicRoutes } from "./routes/public.js";
 
 declare module "fastify" {
   interface FastifyRequest {
+    rawBody?: string;
     auth: { userId: string; workspaceId: string };
   }
   interface FastifyInstance {
@@ -39,7 +43,19 @@ export async function buildApp() {
     logger: { level: env.NODE_ENV === "test" ? "silent" : "info" },
     genReqId: (req) => (req.headers["x-request-id"] as string) ?? randomUUID(),
     requestIdHeader: "x-request-id",
+    maxParamLength: 500, // signed unsubscribe tokens are ~130 chars
   }).withTypeProvider<ZodTypeProvider>();
+
+  // Accept an empty body with a JSON content type (action endpoints like POST /run take no payload).
+  // The raw body is kept because webhook signatures are computed over the exact bytes.
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
+    req.rawBody = body as string;
+    try {
+      done(null, body ? JSON.parse(body as string) : {});
+    } catch (e) {
+      done(Object.assign(e as Error, { statusCode: 400 }), undefined);
+    }
+  });
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -88,6 +104,8 @@ export async function buildApp() {
     return { ok: true };
   });
 
+  await app.register(publicRoutes);
+
   await app.register(
     async (api) => {
       await api.register(authRoutes);
@@ -95,6 +113,8 @@ export async function buildApp() {
       await api.register(campaignRoutes);
       await api.register(templateRoutes);
       await api.register(draftRoutes);
+      await api.register(settingsRoutes);
+      await api.register(sendingRoutes);
     },
     { prefix: "/api/v1" },
   );

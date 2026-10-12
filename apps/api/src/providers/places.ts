@@ -29,8 +29,8 @@ export interface PlacesProvider {
   search(params: PlacesSearchParams): Promise<PlaceResult[]>;
 }
 
-export function createPlacesProvider(): PlacesProvider {
-  return env.PLACES_PROVIDER === "google"
-    ? new GooglePlacesProvider(env.GOOGLE_PLACES_API_KEY!)
-    : new MockPlacesProvider();
+export function createPlacesProvider(apiKey?: string): PlacesProvider {
+  if (env.PLACES_PROVIDER !== "google") return new MockPlacesProvider();
+  if (!apiKey) throw new Error("Google Places API key is not configured (Settings > API keys or GOOGLE_PLACES_API_KEY)");
+  return new GooglePlacesProvider(apiKey);
 }

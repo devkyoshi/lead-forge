@@ -40,3 +40,20 @@ export async function enqueueRun(runId: string, attempt = 0) {
     },
   );
 }
+
+export const SEND_QUEUE = "email-dispatch";
+let sendQueue: Queue | null = null;
+export function getSendQueue() {
+  sendQueue ??= new Queue(SEND_QUEUE, { connection: createRedis() });
+  return sendQueue;
+}
+
+/** Recurring dispatcher: sends due drafts and schedules follow-ups every minute. */
+export async function ensureDispatcherSchedule() {
+  await getSendQueue().upsertJobScheduler("dispatch-every-minute", { every: 60_000 }, { name: "tick", data: {}, opts: { removeOnComplete: 20, removeOnFail: 50 } });
+}
+
+/** Ask for an immediate dispatch (e.g. after approving drafts). Deduplicated per 5s bucket. */
+export async function requestDispatchNow() {
+  await getSendQueue().add("tick", {}, { jobId: `tick-now-${Math.floor(Date.now() / 5000)}`, removeOnComplete: 20, removeOnFail: 50 });
+}

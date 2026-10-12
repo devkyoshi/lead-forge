@@ -9,6 +9,7 @@ import {
 } from "@leadforge/shared";
 import { prisma } from "../db.js";
 import { unsubscribeUrl } from "../lib/unsub.js";
+import { resolveSecret } from "../lib/secrets.js";
 import { createAiProvider, factBasedNote, type AiProvider } from "../providers/ai.js";
 import { HttpError } from "./leads.js";
 
@@ -119,7 +120,7 @@ export async function buildEmail(opts: {
   if (opts.aiPersonalize) {
     const sheet = factSheet(lead, issues);
     try {
-      const sentences = await (opts.ai ?? createAiProvider()).personalize({ tone: opts.tone, facts, factSheet: sheet });
+      const sentences = await (opts.ai ?? createAiProvider(await resolveSecret(lead.workspaceId, "ANTHROPIC"))).personalize({ tone: opts.tone, facts, factSheet: sheet });
       const checked = validateAiSentences(sentences, sheet);
       if (checked.ok) {
         aiNote = checked.sentences.join(" ");
@@ -175,14 +176,18 @@ export async function generateDraft(opts: {
   runId?: string;
   ai?: AiProvider;
   force?: boolean;
+  /** 0 = first email, 1.. = follow-ups. */
+  step?: number;
+  scenario?: Scenario;
 }) {
   const { lead, campaign } = opts;
+  const step = opts.step ?? 0;
   const existing = await prisma.emailDraft.findFirst({
-    where: { leadId: lead.id, campaignId: campaign?.id ?? null, step: 0 },
+    where: { leadId: lead.id, campaignId: campaign?.id ?? null, step },
   });
   if (existing && !opts.force) return { draft: existing, created: false };
 
-  const scenario = scenarioForLead(lead);
+  const scenario = opts.scenario ?? scenarioForLead(lead);
   const tpl = await pickTemplate(lead.workspaceId, scenario, lead.category, campaign?.templateId);
   if (!tpl?.currentVersionId) throw new HttpError(422, `No ${scenario} template available`);
   const version = await prisma.emailTemplateVersion.findUniqueOrThrow({ where: { id: tpl.currentVersionId } });
@@ -203,7 +208,7 @@ export async function generateDraft(opts: {
     campaignId: campaign?.id ?? null,
     runId: opts.runId,
     templateVersionId: version.id,
-    step: 0,
+    step,
     subject: built.subject,
     bodyText: built.bodyText,
     bodyHtml: built.bodyHtml,

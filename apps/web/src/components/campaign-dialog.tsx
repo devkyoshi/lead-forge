@@ -21,6 +21,7 @@ interface Values {
   approvalMode: "REVIEW_FIRST" | "AUTO_SEND";
   tone: "friendly" | "professional" | "concise";
   aiPersonalize: boolean;
+  followups: boolean;
 }
 
 export function CampaignDialog({
@@ -52,6 +53,7 @@ export function CampaignDialog({
       approvalMode: "REVIEW_FIRST",
       tone: "friendly",
       aiPersonalize: true,
+      followups: true,
     },
   });
   const mode = watch("mode");
@@ -66,7 +68,7 @@ export function CampaignDialog({
         ? { type: "city", label: v.areaLabel, query: v.areaLabel }
         : { type: "radius", label: v.areaLabel, lat: Number(v.lat), lng: Number(v.lng), radiusKm: Number(v.radiusKm) };
     try {
-      await api("/campaigns", {
+      const created = await api<{ id: string }>("/campaigns", {
         method: "POST",
         json: {
           name: v.name,
@@ -77,9 +79,18 @@ export function CampaignDialog({
           approvalMode: v.approvalMode,
           tone: v.tone,
           aiPersonalize: v.aiPersonalize,
+          followupSequence: v.followups
+            ? [
+                { delayDays: 3, scenario: "FOLLOWUP_1" },
+                { delayDays: 7, scenario: "FOLLOWUP_2" },
+              ]
+            : [],
         },
       });
       toast.success("Campaign created");
+      const check = await api<{ errors: string[]; warnings: string[] }>(`/campaigns/${created.id}/validate`, { method: "POST" }).catch(() => null);
+      check?.errors.forEach((m) => toast.error(m, { duration: 12000 }));
+      check?.warnings.forEach((m) => toast.warning(m, { duration: 12000 }));
       reset();
       onOpenChange(false);
       onCreated();
@@ -159,6 +170,9 @@ export function CampaignDialog({
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" {...register("aiPersonalize")} /> AI personalize emails
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" {...register("followups")} /> Follow-ups (+3 days, +7 days; stop on reply, unsubscribe or bounce)
           </label>
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             Create campaign

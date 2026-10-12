@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { followupSequenceSchema } from "./sending";
 
 export const areaSchema = z.discriminatedUnion("type", [
   z.object({
@@ -22,6 +23,7 @@ export const campaignCreateSchema = z.object({
   area: areaSchema,
   categories: z.array(z.string().min(1).max(60)).min(1).max(20),
   templateId: z.string().optional(),
+  followupSequence: followupSequenceSchema.default([]),
   filters: campaignFiltersSchema.default({}),
   dailySendLimit: z.number().int().min(1).max(1000).default(25),
   approvalMode: z.enum(["REVIEW_FIRST", "AUTO_SEND"]).default("REVIEW_FIRST"),

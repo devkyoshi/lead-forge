@@ -26,16 +26,6 @@ if (!parsed.success) {
   process.exit(1);
 }
 const env = parsed.data;
-if (env.PLACES_PROVIDER === "google" && !env.GOOGLE_PLACES_API_KEY) {
-  console.error("GOOGLE_PLACES_API_KEY is required when PLACES_PROVIDER=google");
-  process.exit(1);
-}
-if (env.EMAIL_PROVIDER === "sendgrid" && !env.SENDGRID_API_KEY) {
-  console.error("SENDGRID_API_KEY is required when EMAIL_PROVIDER=sendgrid");
-  process.exit(1);
-}
-if (env.AI_PROVIDER === "anthropic" && !env.ANTHROPIC_API_KEY) {
-  console.error("ANTHROPIC_API_KEY is required when AI_PROVIDER=anthropic");
-  process.exit(1);
-}
+// Provider API keys may come from the workspace credential store (Settings) instead of the environment,
+// so a missing key is reported when the provider is first used rather than at boot.
 export { env };

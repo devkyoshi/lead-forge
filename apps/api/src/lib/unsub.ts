@@ -22,3 +22,6 @@ export function verifyUnsubToken(token: string): { workspaceId: string; leadId: 
 
 export const unsubscribeUrl = (workspaceId: string, leadId: string) =>
   `${env.API_PUBLIC_URL}/u/${createUnsubToken(workspaceId, leadId)}`;
+
+/** Shared secret in the inbound-parse webhook URL, so only the mail provider can post replies. */
+export const inboundKey = () => createHmac("sha256", env.JWT_SECRET).update("inbound-webhook").digest("hex").slice(0, 32);

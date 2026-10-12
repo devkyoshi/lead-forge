@@ -115,3 +115,31 @@ describe("validateAiSentences", () => {
     expect(validateAiSentences(["Only $99 per month."], facts).ok).toBe(false);
   });
 });
+
+import { effectiveDailyLimit, inSendWindow, optInRegionWarnings, startOfLocalDay } from "./index";
+
+describe("sending limits", () => {
+  it("ramps the daily limit during warm-up", () => {
+    const start = new Date("2026-01-01T00:00:00Z");
+    const at = (d: number) => new Date(start.getTime() + d * 86_400_000);
+    expect(effectiveDailyLimit({ dailyLimit: 100, warmupEnabled: true, warmupStartedAt: start, now: at(0) })).toBe(5);
+    expect(effectiveDailyLimit({ dailyLimit: 100, warmupEnabled: true, warmupStartedAt: start, now: at(4) })).toBe(25);
+    expect(effectiveDailyLimit({ dailyLimit: 20, warmupEnabled: true, warmupStartedAt: start, now: at(30) })).toBe(20);
+    expect(effectiveDailyLimit({ dailyLimit: 50, warmupEnabled: false, warmupStartedAt: null })).toBe(50);
+  });
+  it("evaluates send windows in the workspace timezone", () => {
+    const t = new Date("2026-06-01T04:30:00Z"); // 10:00 in Asia/Kolkata (UTC+5:30)
+    expect(inSendWindow("Asia/Kolkata", 9, 17, t)).toBe(true);
+    expect(inSendWindow("UTC", 9, 17, t)).toBe(false);
+    expect(inSendWindow("UTC", 22, 6, t)).toBe(true); // wraps midnight
+  });
+  it("finds the local start of day", () => {
+    const t = new Date("2026-06-01T04:30:00Z");
+    expect(startOfLocalDay("Asia/Kolkata", t).toISOString()).toBe("2026-05-31T18:30:00.000Z");
+    expect(startOfLocalDay("UTC", t).toISOString()).toBe("2026-06-01T00:00:00.000Z");
+  });
+  it("warns for opt-in regions only", () => {
+    expect(optInRegionWarnings("Berlin, Germany").length).toBeGreaterThan(0);
+    expect(optInRegionWarnings("Pune, India")).toEqual([]);
+  });
+});

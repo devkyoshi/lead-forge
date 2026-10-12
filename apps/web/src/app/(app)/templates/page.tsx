@@ -217,6 +217,21 @@ export default function TemplatesPage() {
                 <Button onClick={save} disabled={!name || !subject || !body}>
                   {selected === "new" ? "Create template" : "Save new version"}
                 </Button>
+                {selected !== "new" && (
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const r = await api<{ sentTo: string }>(`/templates/${selected}/test-send`, { method: "POST", json: { leadId } });
+                        toast.success(`Test email sent to ${r.sentTo} (saved version)`);
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Test send failed");
+                      }
+                    }}
+                  >
+                    Send test to me
+                  </Button>
+                )}
                 {stats && (
                   <span className="text-xs text-muted-foreground">
                     {stats.sent} sent · {stats.opened} opened · {stats.replied} replied · {stats.converted} converted

@@ -14,6 +14,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
+interface SendStatus {
+  sentToday: number;
+  dailyCap: number;
+  sentLastHour: number;
+  hourlyLimit: number;
+  inSendWindow: boolean;
+  approvedWaiting: number;
+  failed: number;
+}
+
 interface Draft {
   id: string;
   subject: string;
@@ -33,6 +43,7 @@ export default function ApprovalsPage() {
   const [open, setOpen] = useState<Draft | null>(null);
   const [subject, setSubject] = useState("");
   const [text, setText] = useState("");
+  const [sendStatus, setSendStatus] = useState<SendStatus | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -46,6 +57,24 @@ export default function ApprovalsPage() {
     setItems(null);
     load();
   }, [load]);
+
+  const loadStatus = useCallback(() => {
+    api<SendStatus>("/send/status").then(setSendStatus).catch(() => {});
+  }, []);
+  useEffect(() => {
+    loadStatus();
+  }, [loadStatus, items]);
+
+  async function sendNow() {
+    try {
+      const r = await api<{ sent: number; failed: number; deferred: { reason: string; count: number }[] }>("/send/tick", { method: "POST" });
+      toast.success(`${r.sent} sent${r.failed ? `, ${r.failed} failed` : ""}`);
+      r.deferred.forEach((d) => toast.info(`${d.count} waiting: ${d.reason}`));
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Send failed");
+    }
+  }
 
   async function bulk(action: "approve" | "reject" | "regenerate", ids = [...picked]) {
     if (!ids.length) return;
@@ -89,12 +118,26 @@ export default function ApprovalsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Approval queue</h1>
+      {sendStatus && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md border p-3 text-sm">
+          <span>Sent today: <strong>{sendStatus.sentToday}</strong> / {sendStatus.dailyCap}</span>
+          <span>Last hour: <strong>{sendStatus.sentLastHour}</strong> / {sendStatus.hourlyLimit}</span>
+          <span>{sendStatus.inSendWindow ? "Inside send window" : <span className="text-amber-600 dark:text-amber-400">Outside send window</span>}</span>
+          <span>{sendStatus.approvedWaiting} approved and waiting</span>
+          {sendStatus.failed > 0 && <span className="text-destructive">{sendStatus.failed} failed</span>}
+          <Button size="sm" className="ml-auto" variant="outline" onClick={sendNow} disabled={!sendStatus.approvedWaiting}>
+            Send approved now
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Tabs value={status} onValueChange={(v) => setStatus(String(v))}>
           <TabsList>
             <TabsTrigger value="PENDING_REVIEW">Pending</TabsTrigger>
             <TabsTrigger value="APPROVED">Approved</TabsTrigger>
             <TabsTrigger value="REJECTED">Rejected</TabsTrigger>
+            <TabsTrigger value="SENT">Sent</TabsTrigger>
+            <TabsTrigger value="FAILED">Failed</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="flex gap-2">
