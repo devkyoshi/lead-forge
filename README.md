@@ -69,7 +69,7 @@ flowchart LR
 
 - **Node.js 20+** and **pnpm 9** (`npm i -g pnpm`)
 - **Docker Desktop** (runs PostgreSQL and Redis)
-- **GNU Make** (optional; every command also works without it)
+- **GNU Make** (optional; every command also works without it). Works from PowerShell, cmd and bash
 
 ### One command
 
@@ -116,7 +116,7 @@ Run `make help` for the full list.
 | `make infra` / `infra-down` | Start / stop PostgreSQL and Redis |
 | `make migrate` / `seed` | Apply migrations / seed demo data |
 | `make test` / `typecheck` / `build` | Checks |
-| `make stop` | Free ports 3000 and 4000 (Windows) |
+| `make stop` | Free ports 3000 and 4000 (the worker has no port; stop it with `Ctrl+C` in the `make dev` terminal) |
 | `make psql` / `logs` | Database shell / container logs |
 | `make db-reset` | **Deletes all data**, re-migrates and reseeds |
 
@@ -235,7 +235,8 @@ An integration test for a full run with mocked providers, and generated OpenAPI 
 - **Run stays queued:** the worker is not running.
 - **No drafts after a run:** no qualified lead with a public email met the "Auto-draft at score" threshold. Lower it in Settings → Scoring, or select leads and use **Queue email**.
 - **Unsubscribe link goes to the wrong address:** set `API_PUBLIC_URL`.
-- **Port already in use:** `make stop` (Windows), or change `API_PORT`.
+- **Port already in use:** `make stop`, or change `API_PORT`.
+- **`make` fails with `'test' is not recognized` or similar:** you are on an old Makefile; recipes now run on Node and work from PowerShell, cmd and Git Bash.
 - **Start over:** `make db-reset` (deletes all local data).
 
 ## Docker

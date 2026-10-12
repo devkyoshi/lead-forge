@@ -43,7 +43,7 @@ export async function buildApp() {
     logger: { level: env.NODE_ENV === "test" ? "silent" : "info" },
     genReqId: (req) => (req.headers["x-request-id"] as string) ?? randomUUID(),
     requestIdHeader: "x-request-id",
-    maxParamLength: 500, // signed unsubscribe tokens are ~130 chars
+    routerOptions: { maxParamLength: 500 }, // signed unsubscribe tokens are ~130 chars
   }).withTypeProvider<ZodTypeProvider>();
 
   // Accept an empty body with a JSON content type (action endpoints like POST /run take no payload).
