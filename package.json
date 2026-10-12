@@ -1,0 +1,16 @@
+{
+  "name": "leadforge",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev:api": "pnpm --filter @leadforge/api dev",
+    "dev:worker": "pnpm --filter @leadforge/api dev:worker",
+    "dev:web": "pnpm --filter @leadforge/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @leadforge/api db:migrate",
+    "db:seed": "pnpm --filter @leadforge/api db:seed"
+  }
+}

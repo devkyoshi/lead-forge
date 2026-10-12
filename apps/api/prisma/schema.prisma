@@ -1,0 +1,513 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  MEMBER
+}
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+enum ApprovalMode {
+  REVIEW_FIRST
+  AUTO_SEND
+}
+enum RunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+enum RunTrigger {
+  MANUAL
+  CRON
+  API
+}
+enum StageStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  CONTACTED
+  REPLIED
+  INTERESTED
+  PROPOSAL_SENT
+  NEGOTIATING
+  CONFIRMED
+  LOST
+  NOT_INTERESTED
+  UNSUBSCRIBED
+  BOUNCED
+}
+enum WebsiteStatus {
+  NO_WEBSITE
+  SOCIAL_ONLY
+  BROKEN
+  POOR
+  OK
+  UNKNOWN
+}
+enum ContactType {
+  EMAIL
+  PHONE
+  WHATSAPP
+  SOCIAL
+}
+enum TemplateScenario {
+  NO_WEBSITE
+  POOR_WEBSITE
+  FOLLOWUP_1
+  FOLLOWUP_2
+}
+enum DraftStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  QUEUED
+  SENT
+  FAILED
+}
+enum MessageDirection {
+  OUT
+  IN
+}
+enum EmailEventType {
+  DELIVERED
+  OPEN
+  CLICK
+  BOUNCE
+  SPAM
+  UNSUBSCRIBE
+  REPLY
+}
+enum SuppressionReason {
+  UNSUBSCRIBE
+  BOUNCE
+  SPAM
+  MANUAL
+  DELETION
+}
+
+model Workspace {
+  id                String    @id @default(cuid())
+  name              String
+  senderName        String?
+  senderCompany     String?
+  senderAddress     String?
+  replyTo           String?
+  portfolioLink     String?
+  timezone          String    @default("UTC")
+  sendWindowStart   Int       @default(9)
+  sendWindowEnd     Int       @default(17)
+  dailyLimit        Int       @default(50)
+  hourlyLimit       Int       @default(15)
+  warmupEnabled     Boolean   @default(false)
+  warmupStartedAt   DateTime?
+  jurisdictionNotes String?
+  checklistDefaults Json?
+  apiKeyHash        String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  users        User[]
+  campaigns    Campaign[]
+  leads        Lead[]
+  templates    EmailTemplate[]
+  credentials  ProviderCredential[]
+  scoring      ScoringConfig[]
+  suppressions Suppression[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(OWNER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@map("users")
+}
+
+model ProviderCredential {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  provider       String
+  encryptedValue String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, provider])
+  @@map("provider_credentials")
+}
+
+model ScoringConfig {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  weights            Json
+  qualifyThreshold   Int      @default(50)
+  autoQueueThreshold Int      @default(70)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, active])
+  @@map("scoring_configs")
+}
+
+model Campaign {
+  id               String         @id @default(cuid())
+  workspaceId      String
+  name             String
+  status           CampaignStatus @default(DRAFT)
+  area             Json
+  categories       String[]
+  filters          Json           @default("{}")
+  templateId       String?
+  followupSequence Json           @default("[]")
+  dailySendLimit   Int            @default(25)
+  approvalMode     ApprovalMode   @default(REVIEW_FIRST)
+  cron             String?
+  timezone         String         @default("UTC")
+  aiPersonalize    Boolean        @default(true)
+  tone             String         @default("friendly")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id])
+  runs      CampaignRun[]
+  leads     Lead[]
+  drafts    EmailDraft[]
+
+  @@index([workspaceId, status])
+  @@map("campaigns")
+}
+
+model CampaignRun {
+  id           String     @id @default(cuid())
+  workspaceId  String
+  campaignId   String
+  status       RunStatus  @default(QUEUED)
+  trigger      RunTrigger @default(MANUAL)
+  currentStage String?
+  counts       Json       @default("{}")
+  error        String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  campaign Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  stages   RunStageLog[]
+
+  @@index([workspaceId, campaignId, createdAt])
+  @@map("campaign_runs")
+}
+
+model RunStageLog {
+  id          String      @id @default(cuid())
+  workspaceId String
+  runId       String
+  stage       String
+  status      StageStatus @default(PENDING)
+  counts      Json        @default("{}")
+  logs        Json        @default("[]")
+  error       String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  run CampaignRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, stage])
+  @@map("run_stage_logs")
+}
+
+model Lead {
+  id                  String        @id @default(cuid())
+  workspaceId         String
+  campaignId          String?
+  name                String
+  normalizedName      String
+  address             String?
+  normalizedAddress   String?
+  phone               String?
+  normalizedPhone     String?
+  category            String?
+  area                String?
+  rating              Float?
+  reviewCount         Int?
+  lat                 Float?
+  lng                 Float?
+  websiteUrl          String?
+  source              String        @default("manual")
+  sourcePlaceId       String?
+  status              LeadStatus    @default(NEW)
+  score               Int           @default(0)
+  scoreBreakdown      Json?
+  websiteStatus       WebsiteStatus @default(UNKNOWN)
+  websiteScore        Int?
+  needsManualOutreach Boolean       @default(false)
+  assignedTo          String?
+  tags                String[]
+  project             Json?
+  closedReason        String?
+  deletedAt           DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  workspace Workspace             @relation(fields: [workspaceId], references: [id])
+  campaign  Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  audits    LeadAudit[]
+  contacts  LeadContact[]
+  checklist LeadChecklistItem[]
+  history   LeadStatusHistory[]
+  notes     LeadNote[]
+  drafts    EmailDraft[]
+  messages  EmailMessage[]
+
+  @@unique([workspaceId, source, sourcePlaceId])
+  @@unique([workspaceId, normalizedPhone])
+  @@unique([workspaceId, normalizedName, normalizedAddress])
+  @@index([workspaceId, status])
+  @@index([workspaceId, score])
+  @@index([workspaceId, websiteStatus])
+  @@index([workspaceId, campaignId])
+  @@map("leads")
+}
+
+model LeadAudit {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  leadId        String
+  version       Int           @default(1)
+  websiteStatus WebsiteStatus
+  websiteScore  Int?
+  issues        Json          @default("[]")
+  checks        Json          @default("{}")
+  fetchedAt     DateTime      @default(now())
+  createdAt     DateTime      @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, version])
+  @@index([workspaceId])
+  @@map("lead_audits")
+}
+
+model LeadContact {
+  id              String      @id @default(cuid())
+  workspaceId     String
+  leadId          String
+  type            ContactType
+  value           String
+  normalizedValue String
+  source          String?
+  confidence      Float?
+  verified        Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, type, normalizedValue])
+  @@index([workspaceId, normalizedValue])
+  @@map("lead_contacts")
+}
+
+model LeadChecklistItem {
+  id          String    @id @default(cuid())
+  workspaceId String
+  leadId      String
+  key         String
+  label       String
+  position    Int       @default(0)
+  done        Boolean   @default(false)
+  doneAt      DateTime?
+  doneBy      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, key])
+  @@index([workspaceId])
+  @@map("lead_checklist_items")
+}
+
+model LeadStatusHistory {
+  id          String      @id @default(cuid())
+  workspaceId String
+  leadId      String
+  fromStatus  LeadStatus?
+  toStatus    LeadStatus
+  actor       String
+  reason      String?
+  meta        Json?
+  createdAt   DateTime    @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, leadId, createdAt])
+  @@map("lead_status_history")
+}
+
+model LeadNote {
+  id          String   @id @default(cuid())
+  workspaceId String
+  leadId      String
+  authorId    String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, leadId])
+  @@map("lead_notes")
+}
+
+model EmailTemplate {
+  id               String           @id @default(cuid())
+  workspaceId      String
+  name             String
+  category         String           @default("generic")
+  scenario         TemplateScenario
+  currentVersionId String?
+  archived         Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  workspace Workspace              @relation(fields: [workspaceId], references: [id])
+  versions  EmailTemplateVersion[]
+
+  @@index([workspaceId, scenario])
+  @@map("email_templates")
+}
+
+model EmailTemplateVersion {
+  id          String   @id @default(cuid())
+  workspaceId String
+  templateId  String
+  version     Int
+  subject     String
+  bodyMd      String
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  template EmailTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  drafts   EmailDraft[]
+
+  @@unique([templateId, version])
+  @@map("email_template_versions")
+}
+
+model EmailDraft {
+  id                String      @id @default(cuid())
+  workspaceId       String
+  leadId            String
+  campaignId        String?
+  runId             String?
+  templateVersionId String?
+  step              Int         @default(0)
+  subject           String
+  bodyHtml          String
+  bodyText          String
+  variablesUsed     Json        @default("{}")
+  aiGenerated       Boolean     @default(false)
+  status            DraftStatus @default(PENDING_REVIEW)
+  scheduledFor      DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  lead     Lead                  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaign Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  version  EmailTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: SetNull)
+  messages EmailMessage[]
+
+  @@unique([leadId, campaignId, step])
+  @@index([workspaceId, status])
+  @@map("email_drafts")
+}
+
+model EmailMessage {
+  id                String           @id @default(cuid())
+  workspaceId       String
+  leadId            String
+  draftId           String?
+  direction         MessageDirection @default(OUT)
+  toEmail           String
+  provider          String?
+  providerMessageId String?          @unique
+  status            String           @default("queued")
+  threadKey         String?
+  body              String?
+  sentAt            DateTime?
+  createdAt         DateTime         @default(now())
+
+  lead   Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  draft  EmailDraft?  @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  events EmailEvent[]
+
+  @@index([workspaceId, leadId])
+  @@index([workspaceId, sentAt])
+  @@map("email_messages")
+}
+
+model EmailEvent {
+  id              String         @id @default(cuid())
+  workspaceId     String
+  messageId       String
+  type            EmailEventType
+  providerEventId String?        @unique
+  payload         Json?
+  occurredAt      DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+
+  message EmailMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, type])
+  @@map("email_events")
+}
+
+model Suppression {
+  id          String            @id @default(cuid())
+  workspaceId String
+  value       String
+  reason      SuppressionReason
+  source      String?
+  createdAt   DateTime          @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, value])
+  @@map("suppression_list")
+}
+
