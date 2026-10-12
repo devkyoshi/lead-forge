@@ -80,3 +80,38 @@ describe("status transitions", () => {
     expect(validateTransition("NEGOTIATING", "CONFIRMED", { project: { name: "Site" } })).toBeNull();
   });
 });
+
+import { markdownToHtml, renderTemplate, validateAiSentences } from "./index";
+
+describe("renderTemplate", () => {
+  it("substitutes variables, uses fallbacks and reports missing ones", () => {
+    const r = renderTemplate("Hi {{owner_name|there}}, {{business_name}} in {{area}} {{nope}}", { business_name: "Cafe Bloom", area: "Pune" });
+    expect(r.text).toBe("Hi there, Cafe Bloom in Pune");
+    expect(r.used.owner_name).toBe("there");
+    expect(r.missing).toEqual(["nope"]);
+  });
+  it("collapses blank lines left by empty variables", () => {
+    expect(renderTemplate("a\n\n{{ai_note}}\n\nb", {}).text).toBe("a\n\nb");
+  });
+});
+
+describe("markdownToHtml", () => {
+  it("escapes html and renders links and lists", () => {
+    const html = markdownToHtml("Hi <script>x</script> [go](https://a.com)\n\n- one\n- two");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain('<a href="https://a.com">go</a>');
+    expect(html).toContain("<ul><li>one</li><li>two</li></ul>");
+  });
+});
+
+describe("validateAiSentences", () => {
+  const facts = "Cafe Bloom rated 4.6 with 212 reviews";
+  it("accepts sentences that only use supplied numbers", () => {
+    expect(validateAiSentences(["With 212 reviews you clearly have happy guests."], facts).ok).toBe(true);
+  });
+  it("rejects invented numbers, links and prices", () => {
+    expect(validateAiSentences(["You have 500 reviews."], facts).ok).toBe(false);
+    expect(validateAiSentences(["See www.x.com"], facts).ok).toBe(false);
+    expect(validateAiSentences(["Only $99 per month."], facts).ok).toBe(false);
+  });
+});

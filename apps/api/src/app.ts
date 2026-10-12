@@ -20,6 +20,8 @@ import { authRoutes } from "./routes/auth.js";
 import { leadRoutes } from "./routes/leads.js";
 import { campaignRoutes } from "./routes/campaigns.js";
 import { mockSiteRoutes } from "./routes/mock-sites.js";
+import { templateRoutes } from "./routes/templates.js";
+import { draftRoutes } from "./routes/drafts.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -91,6 +93,8 @@ export async function buildApp() {
       await api.register(authRoutes);
       await api.register(leadRoutes);
       await api.register(campaignRoutes);
+      await api.register(templateRoutes);
+      await api.register(draftRoutes);
     },
     { prefix: "/api/v1" },
   );

@@ -9,11 +9,12 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Mail, Plus } from "lucide-react";
 import { LEAD_STATUSES } from "@leadforge/shared";
 import { api, type Lead } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -51,6 +52,7 @@ export default function LeadsPage() {
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +78,20 @@ export default function LeadsPage() {
     const t = setTimeout(load, q ? 250 : 0);
     return () => clearTimeout(t);
   }, [load, q]);
+
+  async function queueEmails() {
+    try {
+      const res = await api<{ created: number; skipped: { name: string; reason: string }[] }>("/leads/queue-email", {
+        method: "POST",
+        json: { ids: [...picked] },
+      });
+      toast.success(`${res.created} draft(s) created. Review them in the Approval Queue.`);
+      res.skipped.slice(0, 5).forEach((s) => toast.warning(`${s.name}: ${s.reason}`));
+      setPicked(new Set());
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not queue emails");
+    }
+  }
 
   const columns = useMemo<ColumnDef<Lead>[]>(
     () => [
@@ -126,9 +142,14 @@ export default function LeadsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Leads</h1>
-        <Button onClick={() => setAdding(true)}>
-          <Plus className="size-4" /> Add lead
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" disabled={!picked.size} onClick={queueEmails}>
+            <Mail className="size-4" /> Queue email ({picked.size})
+          </Button>
+          <Button onClick={() => setAdding(true)}>
+            <Plus className="size-4" /> Add lead
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -167,6 +188,12 @@ export default function LeadsPage() {
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={!!data?.items.length && picked.size === data.items.length}
+                    onCheckedChange={(v) => setPicked(v === true && data ? new Set(data.items.map((i) => i.id)) : new Set())}
+                  />
+                </TableHead>
                 {hg.headers.map((h) => {
                   const sortable = ["name", "rating", "score"].includes(h.column.id);
                   return (
@@ -187,7 +214,7 @@ export default function LeadsPage() {
             {loading && !data ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={columns.length}>
+                  <TableCell colSpan={columns.length + 1}>
                     <Skeleton className="h-8 w-full" />
                   </TableCell>
                 </TableRow>
@@ -195,6 +222,19 @@ export default function LeadsPage() {
             ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id} className="cursor-pointer" onClick={() => setOpenId(row.original.id)}>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={picked.has(row.original.id)}
+                      onCheckedChange={(v) =>
+                        setPicked((p) => {
+                          const n = new Set(p);
+                          if (v === true) n.add(row.original.id);
+                          else n.delete(row.original.id);
+                          return n;
+                        })
+                      }
+                    />
+                  </TableCell>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
@@ -202,7 +242,7 @@ export default function LeadsPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={columns.length + 1} className="h-24 text-center text-muted-foreground">
                   No leads found.
                 </TableCell>
               </TableRow>

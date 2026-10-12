@@ -19,6 +19,9 @@ import { prisma } from "../db.js";
 import { politeFetch } from "../lib/fetcher.js";
 import type { PlacesProvider, PlaceResult } from "../providers/places.js";
 import { changeLeadStatus } from "./leads.js";
+import { generateDraft } from "./drafts.js";
+import { isSuppressed } from "./suppression.js";
+import type { AiProvider } from "../providers/ai.js";
 
 export interface StageCtx {
   runId: string;
@@ -302,4 +305,43 @@ export async function scoreStage(ctx: StageCtx): Promise<StageResult> {
   }
   ctx.log(`scored ${leads.length} leads, ${qualified} qualified (threshold ${qualifyThreshold})`);
   return { counts: { scored: leads.length, qualified } };
+}
+
+/** Drafts a personalised email for each qualified, contactable lead above the auto-queue threshold. */
+export async function draftStage(ctx: StageCtx, ai?: AiProvider): Promise<StageResult> {
+  const { autoQueueThreshold } = await loadScoring(ctx.workspaceId);
+  const leads = await prisma.lead.findMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      campaignId: ctx.campaign.id,
+      deletedAt: null,
+      status: "QUALIFIED",
+      score: { gte: autoQueueThreshold },
+      drafts: { none: { campaignId: ctx.campaign.id, step: 0 } },
+    },
+    include: { contacts: { where: { type: "EMAIL" }, orderBy: { confidence: "desc" }, take: 1 } },
+  });
+  let drafted = 0;
+  let suppressed = 0;
+  let skipped = 0;
+  for (const lead of leads) {
+    await ctx.checkCancelled();
+    const email = lead.contacts[0]?.value;
+    if (!email) {
+      skipped++;
+      continue;
+    }
+    if (await isSuppressed(ctx.workspaceId, email)) {
+      suppressed++;
+      continue;
+    }
+    try {
+      const { created } = await generateDraft({ lead, campaign: ctx.campaign, runId: ctx.runId, ai });
+      if (created) drafted++;
+    } catch (e) {
+      ctx.log(`draft failed for ${lead.name}: ${(e as Error).message}`);
+    }
+  }
+  ctx.log(`${drafted} drafts created (${skipped} leads without email, ${suppressed} suppressed; threshold ${autoQueueThreshold})`);
+  return { counts: { drafted } };
 }

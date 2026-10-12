@@ -2,7 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { EMPTY_COUNTS, RUN_STAGES, type RunStage } from "@leadforge/shared";
 import { prisma } from "../db.js";
 import { createPlacesProvider, type PlacesProvider } from "../providers/places.js";
-import { auditStage, discoverStage, enrichStage, scoreStage, type StageCtx, type StageResult } from "./stages.js";
+import { auditStage, discoverStage, draftStage, enrichStage, scoreStage, type StageCtx, type StageResult } from "./stages.js";
+import type { AiProvider } from "../providers/ai.js";
 
 class RunCancelled extends Error {}
 
@@ -13,7 +14,7 @@ type StageFn = (ctx: StageCtx) => Promise<StageResult>;
  * run_stage_logs is skipped, so a retried/resumed job continues where it stopped. Each stage
  * only touches leads that still need that stage's work, so re-running is safe.
  */
-export async function executeRun(runId: string, deps: { places?: PlacesProvider } = {}) {
+export async function executeRun(runId: string, deps: { places?: PlacesProvider; ai?: AiProvider } = {}) {
   const run = await prisma.campaignRun.findUnique({ where: { id: runId }, include: { campaign: true, stages: true } });
   if (!run) throw new Error(`Run ${runId} not found`);
   if (run.status === "CANCELLED" || run.status === "COMPLETED") return;
@@ -30,6 +31,7 @@ export async function executeRun(runId: string, deps: { places?: PlacesProvider 
     audit: auditStage,
     enrich: enrichStage,
     score: scoreStage,
+    draft: (c) => draftStage(c, deps.ai),
   };
   const counts: Record<string, number> = { ...EMPTY_COUNTS, ...(run.counts as Record<string, number>) };
 

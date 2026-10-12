@@ -6,6 +6,7 @@ import { COOKIE_NAME } from "../constants.js";
 import { env } from "../env.js";
 import { prisma } from "../db.js";
 import { HttpError } from "../services/leads.js";
+import { ensureDefaultTemplates } from "../services/drafts.js";
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
@@ -35,6 +36,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         data: { workspaceId: ws.id, email: email.toLowerCase(), passwordHash, name, role: "OWNER" },
       });
     });
+    await ensureDefaultTemplates(user.workspaceId);
     setSession(reply, user);
     return { id: user.id, email: user.email, name: user.name, workspaceId: user.workspaceId };
   });

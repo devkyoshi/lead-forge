@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const STAGES = ["discover", "audit", "enrich", "score"];
+const STAGES = ["discover", "audit", "enrich", "score", "draft"];
 const COUNT_LABELS: [string, string][] = [
   ["discovered", "Discovered"],
   ["new", "New"],

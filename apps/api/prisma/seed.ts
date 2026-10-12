@@ -1,5 +1,6 @@
 import argon2 from "argon2";
 import { PrismaClient } from "@prisma/client";
+import { ensureDefaultTemplates } from "../src/services/drafts.js";
 import { DEFAULT_CHECKLIST, normalizeAddress, normalizeName, normalizePhone } from "@leadforge/shared";
 
 const prisma = new PrismaClient();
@@ -14,7 +15,9 @@ const DEMO_LEADS = [
 async function main() {
   const existing = await prisma.user.findUnique({ where: { email: "admin@leadforge.local" } });
   if (existing) {
-    console.log("Seed already applied.");
+    await prisma.workspace.updateMany({ where: { id: existing.workspaceId, portfolioLink: null }, data: { portfolioLink: "https://example.com/portfolio" } });
+    await ensureDefaultTemplates(existing.workspaceId);
+    console.log("Seed already applied (default templates ensured).");
     return;
   }
   const ws = await prisma.workspace.create({
@@ -23,6 +26,7 @@ async function main() {
       senderName: "Alex",
       senderCompany: "Your Studio",
       senderAddress: "123 Example Street, City, Country",
+      portfolioLink: "https://example.com/portfolio",
       timezone: "Asia/Kolkata",
     },
   });
@@ -43,6 +47,7 @@ async function main() {
       autoQueueThreshold: 70,
     },
   });
+  await ensureDefaultTemplates(ws.id);
   for (const l of DEMO_LEADS) {
     const lead = await prisma.lead.create({
       data: {
