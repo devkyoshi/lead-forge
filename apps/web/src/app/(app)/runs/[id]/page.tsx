@@ -104,7 +104,7 @@ export default function RunPage({ params }: { params: Promise<{ id: string }> })
                 Resume
               </Button>
             )}
-            <Button size="sm" variant="outline" render={<Link href="/leads" />}>
+            <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/leads" />}>
               <Users className="size-4" /> View leads
             </Button>
           </>

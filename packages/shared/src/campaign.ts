@@ -24,6 +24,9 @@ export const campaignCreateSchema = z.object({
   categories: z.array(z.string().min(1).max(60)).min(1).max(20),
   templateId: z.string().optional(),
   followupSequence: followupSequenceSchema.default([]),
+  /** 5-field cron expression, e.g. "0 9 * * 1-5". Null/absent = manual runs only. */
+  cron: z.string().trim().max(100).nullable().optional(),
+  timezone: z.string().max(64).optional(),
   filters: campaignFiltersSchema.default({}),
   dailySendLimit: z.number().int().min(1).max(1000).default(25),
   approvalMode: z.enum(["REVIEW_FIRST", "AUTO_SEND"]).default("REVIEW_FIRST"),

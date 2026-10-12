@@ -57,3 +57,10 @@ export async function ensureDispatcherSchedule() {
 export async function requestDispatchNow() {
   await getSendQueue().add("tick", {}, { jobId: `tick-now-${Math.floor(Date.now() / 5000)}`, removeOnComplete: 20, removeOnFail: 50 });
 }
+
+export const SCHEDULE_QUEUE = "campaign-schedule";
+let scheduleQueue: Queue | null = null;
+export function getScheduleQueue() {
+  scheduleQueue ??= new Queue(SCHEDULE_QUEUE, { connection: createRedis() });
+  return scheduleQueue;
+}

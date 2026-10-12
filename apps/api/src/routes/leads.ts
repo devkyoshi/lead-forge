@@ -14,6 +14,7 @@ import {
 } from "@leadforge/shared";
 import { prisma } from "../db.js";
 import { HttpError, changeLeadStatus, createLead } from "../services/leads.js";
+import { buildTimeline } from "../services/timeline.js";
 
 const idParam = z.object({ id: z.string().min(1) });
 
@@ -163,9 +164,6 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
 
   r.get("/leads/:id/timeline", { ...auth, schema: { params: idParam, tags: ["leads"] } }, async (req) => {
     await getLead(req.auth.workspaceId, req.params.id);
-    return prisma.leadStatusHistory.findMany({
-      where: { leadId: req.params.id, workspaceId: req.auth.workspaceId },
-      orderBy: { createdAt: "desc" },
-    });
+    return { items: await buildTimeline(req.auth.workspaceId, req.params.id) };
   });
 };

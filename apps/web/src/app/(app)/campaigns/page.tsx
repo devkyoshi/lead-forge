@@ -15,6 +15,7 @@ import { DataTableShell } from "@/components/data-table-shell";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { describeCron } from "@/components/schedule-picker";
 
 export default function CampaignsPage() {
   const router = useRouter();
@@ -65,6 +66,7 @@ export default function CampaignsPage() {
               <TableHead>Campaign</TableHead>
               <TableHead>Categories</TableHead>
               <TableHead className="text-right">Leads</TableHead>
+              <TableHead>Schedule</TableHead>
               <TableHead>Last run</TableHead>
               <TableHead>Status</TableHead>
               <TableHead />
@@ -74,14 +76,14 @@ export default function CampaignsPage() {
             {!items ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={7}>
                     <Skeleton className="h-9 w-full" />
                   </TableCell>
                 </TableRow>
               ))
             ) : items.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={6}>
+                <TableCell colSpan={7}>
                   <EmptyState
                     icon={Megaphone}
                     title="No campaigns yet"
@@ -115,6 +117,13 @@ export default function CampaignsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{c._count.leads}</TableCell>
+                    <TableCell className="text-sm">
+                      <div>{describeCron(c.cron)}</div>
+                      {c.cron && c.status === "ACTIVE" && c.nextRunAt && (
+                        <div className="text-xs text-muted-foreground">Next: {new Date(c.nextRunAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit", month: "short", day: "numeric" })}</div>
+                      )}
+                      {c.cron && c.status !== "ACTIVE" && <div className="text-xs text-muted-foreground">Paused</div>}
+                    </TableCell>
                     <TableCell>
                       {last ? (
                         <Link href={`/runs/${last.id}`} aria-label="Open last run">

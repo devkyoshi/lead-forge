@@ -40,9 +40,10 @@ export const settingsRoutes: FastifyPluginAsync = async (app) => {
 
   r.get("/settings", { ...auth, schema: { tags: ["settings"] } }, async (req) => {
     const ws = await prisma.workspace.findUniqueOrThrow({ where: { id: req.auth.workspaceId } });
-    const { apiKeyHash: _h, ...safe } = ws;
+    const { apiKeyHash, ...safe } = ws;
     return {
       ...safe,
+      hasApiKey: !!apiKeyHash,
       inboundWebhookUrl: `${env.API_PUBLIC_URL}/webhooks/sendgrid/inbound?key=${inboundKey()}`,
       eventWebhookUrl: `${env.API_PUBLIC_URL}/webhooks/sendgrid/events`,
       emailProvider: env.EMAIL_PROVIDER,

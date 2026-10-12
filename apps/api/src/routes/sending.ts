@@ -10,7 +10,7 @@ import { createEmailProvider } from "../providers/email.js";
 import { buildEmail, pickTemplate, scenarioForLead } from "../services/drafts.js";
 import { applyEmailEvent } from "../services/events.js";
 import { HttpError } from "../services/leads.js";
-import { dispatchWorkspace } from "../services/sender.js";
+import { dispatchWorkspace, getSendStatus } from "../services/sender.js";
 import { cancelPendingDrafts } from "../services/compliance.js";
 
 const idParam = z.object({ id: z.string().min(1) });
@@ -22,27 +22,7 @@ export const sendingRoutes: FastifyPluginAsync = async (app) => {
   /** Runs one dispatcher pass now (still honours window, caps and throttles). */
   r.post("/send/tick", { ...auth, schema: { tags: ["sending"] } }, async (req) => dispatchWorkspace(req.auth.workspaceId));
 
-  r.get("/send/status", { ...auth, schema: { tags: ["sending"] } }, async (req) => {
-    const ws = await prisma.workspace.findUniqueOrThrow({ where: { id: req.auth.workspaceId } });
-    const now = new Date();
-    const [sentToday, sentLastHour, approvedWaiting, pendingReview, failed] = await Promise.all([
-      prisma.emailMessage.count({ where: { workspaceId: ws.id, direction: "OUT", sentAt: { gte: startOfLocalDay(ws.timezone, now) } } }),
-      prisma.emailMessage.count({ where: { workspaceId: ws.id, direction: "OUT", sentAt: { gte: new Date(now.getTime() - 3_600_000) } } }),
-      prisma.emailDraft.count({ where: { workspaceId: ws.id, status: "APPROVED" } }),
-      prisma.emailDraft.count({ where: { workspaceId: ws.id, status: "PENDING_REVIEW" } }),
-      prisma.emailDraft.count({ where: { workspaceId: ws.id, status: "FAILED" } }),
-    ]);
-    return {
-      sentToday,
-      dailyCap: effectiveDailyLimit({ dailyLimit: ws.dailyLimit, warmupEnabled: ws.warmupEnabled, warmupStartedAt: ws.warmupStartedAt, now }),
-      sentLastHour,
-      hourlyLimit: ws.hourlyLimit,
-      inSendWindow: inSendWindow(ws.timezone, ws.sendWindowStart, ws.sendWindowEnd, now),
-      approvedWaiting,
-      pendingReview,
-      failed,
-    };
-  });
+  r.get("/send/status", { ...auth, schema: { tags: ["sending"] } }, async (req) => getSendStatus(req.auth.workspaceId));
 
   r.post(
     "/templates/:id/test-send",

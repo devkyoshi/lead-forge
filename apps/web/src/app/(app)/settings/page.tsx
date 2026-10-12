@@ -308,6 +308,71 @@ function ApiKeys() {
   );
 }
 
+function TriggerApiKey() {
+  const [has, setHas] = useState<boolean | null>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const load = useCallback(() => api<{ hasApiKey: boolean }>("/settings").then((s) => setHas(s.hasApiKey)).catch(saveError), []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  return (
+    <Card className="max-w-xl">
+      <CardHeader>
+        <CardTitle>Automation API key</CardTitle>
+        <CardDescription>Lets scripts or other tools start a campaign run. Shown once when created; only a hash is stored.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-2">
+          {has ? <Badge>active</Badge> : <Badge variant="outline">none</Badge>}
+          <Button
+            variant="outline"
+            onClick={async () => {
+              if (has && !confirm("Generate a new key? The current key stops working immediately.")) return;
+              try {
+                const r = await api<{ apiKey: string }>("/settings/api-key", { method: "POST" });
+                setFresh(r.apiKey);
+                load();
+              } catch (e) {
+                saveError(e);
+              }
+            }}
+          >
+            {has ? "Rotate key" : "Generate key"}
+          </Button>
+          {has && (
+            <Button
+              variant="ghost"
+              onClick={async () => {
+                await api("/settings/api-key", { method: "DELETE" });
+                setFresh(null);
+                load();
+              }}
+            >
+              Revoke
+            </Button>
+          )}
+        </div>
+        {fresh && (
+          <div className="space-y-1 rounded-lg border border-primary/30 bg-brand-soft p-3 text-sm">
+            <p className="font-medium">Copy this key now. You will not see it again.</p>
+            <div className="flex gap-2">
+              <code className="min-w-0 flex-1 break-all rounded bg-background px-2 py-1 text-xs">{fresh}</code>
+              <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(fresh).then(() => toast.success("Copied"))}>
+                Copy
+              </Button>
+            </div>
+          </div>
+        )}
+        <pre className="overflow-x-auto rounded-lg bg-muted/60 p-3 text-xs">{`curl -X POST ${apiBase}/api/v1/trigger/campaigns/<campaign-id>/run \\
+  -H "x-api-key: <your key>" \\
+  -H "Idempotency-Key: <optional unique id>"`}</pre>
+        <p className="text-xs text-muted-foreground">Returns 202 with the run id, or 409 if that campaign already has a run in progress. Repeating the same Idempotency-Key within 24 hours returns the original run.</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function Checklist() {
   const [items, setItems] = useState<{ key: string; label: string }[]>([...DEFAULT_CHECKLIST]);
   useEffect(() => {
@@ -365,7 +430,7 @@ export default function SettingsPage() {
         <TabsContent value="sender" className="pt-4"><SenderAndSending /></TabsContent>
         <TabsContent value="scoring" className="pt-4"><Scoring /></TabsContent>
         <TabsContent value="suppression" className="pt-4"><Suppression /></TabsContent>
-        <TabsContent value="keys" className="pt-4"><ApiKeys /></TabsContent>
+        <TabsContent value="keys" className="space-y-4 pt-4"><ApiKeys /><TriggerApiKey /></TabsContent>
         <TabsContent value="checklist" className="pt-4"><Checklist /></TabsContent>
       </Tabs>
     </div>

@@ -6,7 +6,7 @@ LeadForge searches an area for businesses (hotels, restaurants, salons, clinics,
 
 Everything runs on mock providers out of the box, so you can try the full flow with **no API keys and no real emails sent**.
 
-> **Status:** Phases 1-4 are built (discovery, audit, scoring, templates, AI drafts, approval queue, sending, webhooks, unsubscribe, follow-ups, settings). Still to come: the drag-and-drop pipeline board, cron scheduling and the dashboard (Phase 5), then the integration test suite and OpenAPI polish (Phase 6).
+> **Status:** Phases 1-5 are built: discovery, audit, scoring, templates, AI drafts, approval queue, sending, webhooks, unsubscribe, follow-ups, settings, the drag-and-drop pipeline board, per-campaign scheduling, the dashboard and a full activity timeline. Still to come: the integration test suite and OpenAPI polish (Phase 6).
 
 ---
 
@@ -142,6 +142,16 @@ Run `make help` for the full list.
 
 ---
 
+## Scheduling and automation
+
+- **Schedules:** open a campaign (or the New campaign dialog) and choose *Every day*, *Every weekday*, *Once a week* or a custom cron expression, plus a timezone. The worker runs it on its own. Runs must be at least an hour apart, a campaign that is paused does not run, and a tick is skipped if the previous run is still going, so schedules never stack or duplicate leads.
+- **Trigger API:** Settings → API keys → *Automation API key*. Then start a run from any script:
+  ```bash
+  curl -X POST http://localhost:4000/api/v1/trigger/campaigns/<campaign-id>/run     -H "x-api-key: <your key>" -H "Idempotency-Key: <optional unique id>"
+  ```
+  Returns `202` with the run id, or `409` if that campaign already has a run in progress. Repeating the same `Idempotency-Key` within 24 hours returns the original run. The key is shown once and only a hash is stored.
+- The worker re-registers every schedule on start, so schedules survive a Redis reset. Keep `make worker` (or `make dev`) running for schedules and sending to happen.
+
 ## Going live
 
 Everything below is optional and independent. Set values in `.env`, or paste API keys in **Settings → API keys** (stored encrypted, and they override `.env`).
@@ -189,12 +199,13 @@ These are built in, not optional:
 
 | Page | What it does |
 |------|--------------|
-| **Leads** | Searchable, sortable table with status filter. Bulk "Queue email". The lead sheet shows the audit, score breakdown, contacts, emails, checklist, timeline and notes. |
-| **Campaigns** | Create, run, pause and resume. Run pages show live stage progress, counts and logs, with cancel and resume. |
+| **Leads** | Searchable, sortable table with status filter. Bulk "Queue email". The lead sheet shows the audit, score breakdown, contacts, emails, checklist with progress, a full activity timeline (status changes, emails, opens, replies, notes) and notes. |
+| **Campaigns** | Create, run, pause and resume, and set a schedule. Run pages show live stage progress, counts and logs, with cancel and resume. |
 | **Templates** | Versioned editor with variable picker, live preview against a real lead, tone and AI toggle, and "send test to me". |
 | **Approval queue** | Review, edit, approve, reject or regenerate drafts in bulk. Shows today's send count against the limit. |
-| **Settings** | Sender identity, limits and send window, scoring weights, suppression list, encrypted API keys, checklist defaults. |
-| Dashboard, Pipeline | Placeholders until Phase 5. |
+| **Pipeline** | Kanban board of every lead by stage. Drag a card to change its stage. Moving to *Confirmed* asks for project details; *Lost* and *Not interested* ask for a reason. Unsubscribed and bounced leads are locked. |
+| **Dashboard** | Funnel (discovered → qualified → contacted → replied → confirmed), emails sent today against your limit, a 14-day send chart (with a table view), recent runs and top templates. |
+| **Settings** | Sender identity, limits and send window, scoring weights, suppression list, encrypted API keys, the automation API key, checklist defaults. |
 
 **Template variables:** `{{business_name}}`, `{{owner_name|there}}`, `{{category}}`, `{{area}}`, `{{website_issues}}`, `{{ai_note}}`, `{{rating}}`, `{{review_count}}`, `{{sender_name}}`, `{{sender_company}}`, `{{portfolio_link}}`, `{{unsubscribe_link}}`. `{{name|fallback}}` uses the fallback when the value is empty. Four default templates are seeded (no website, poor website, follow-up 1, follow-up 2).
 

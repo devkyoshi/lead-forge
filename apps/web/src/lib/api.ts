@@ -86,6 +86,9 @@ export interface Campaign {
   area: { type: string; label: string };
   approvalMode: string;
   dailySendLimit: number;
+  cron: string | null;
+  timezone: string;
+  nextRunAt: string | null;
   runs: Run[];
   _count: { leads: number };
 }

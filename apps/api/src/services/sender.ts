@@ -238,3 +238,25 @@ export async function dispatchAll(provider?: EmailProvider): Promise<Record<stri
   }
   return out;
 }
+
+/** Today's sending usage against the configured limits (shared by the approvals strip and the dashboard). */
+export async function getSendStatus(workspaceId: string, now = new Date()) {
+  const ws = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+  const [sentToday, sentLastHour, approvedWaiting, pendingReview, failed] = await Promise.all([
+    prisma.emailMessage.count({ where: { workspaceId, direction: "OUT", sentAt: { gte: startOfLocalDay(ws.timezone, now) } } }),
+    prisma.emailMessage.count({ where: { workspaceId, direction: "OUT", sentAt: { gte: new Date(now.getTime() - 3_600_000) } } }),
+    prisma.emailDraft.count({ where: { workspaceId, status: "APPROVED" } }),
+    prisma.emailDraft.count({ where: { workspaceId, status: "PENDING_REVIEW" } }),
+    prisma.emailDraft.count({ where: { workspaceId, status: "FAILED" } }),
+  ]);
+  return {
+    sentToday,
+    dailyCap: effectiveDailyLimit({ dailyLimit: ws.dailyLimit, warmupEnabled: ws.warmupEnabled, warmupStartedAt: ws.warmupStartedAt, now }),
+    sentLastHour,
+    hourlyLimit: ws.hourlyLimit,
+    inSendWindow: inSendWindow(ws.timezone, ws.sendWindowStart, ws.sendWindowEnd, now),
+    approvedWaiting,
+    pendingReview,
+    failed,
+  };
+}

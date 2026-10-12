@@ -4,11 +4,13 @@ import { z } from "zod";
 import { campaignCreateSchema, campaignUpdateSchema, scoringWeightsSchema } from "@leadforge/shared";
 import { prisma } from "../db.js";
 import { enqueueRun } from "../queue.js";
+import { startRun, ACTIVE_RUN_STATUSES } from "../services/runs.js";
+import { assertValidCron, nextRunAt, syncCampaignSchedule } from "../services/schedule.js";
 import { HttpError } from "../services/leads.js";
 import { loadScoring } from "../services/stages.js";
 
 const idParam = z.object({ id: z.string().min(1) });
-const ACTIVE = ["QUEUED", "RUNNING"] as const;
+const ACTIVE = ACTIVE_RUN_STATUSES;
 
 export const campaignRoutes: FastifyPluginAsync = async (app) => {
   const r = app.withTypeProvider<ZodTypeProvider>();
@@ -20,14 +22,7 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
     return c;
   }
 
-  /** Creates a run and enqueues it; refuses if one is already active (safe to re-trigger). */
-  async function startRun(workspaceId: string, campaignId: string, trigger: "MANUAL" | "CRON" | "API") {
-    const active = await prisma.campaignRun.findFirst({ where: { campaignId, status: { in: [...ACTIVE] } } });
-    if (active) throw new HttpError(409, `A run is already ${active.status.toLowerCase()} (${active.id})`);
-    const run = await prisma.campaignRun.create({ data: { workspaceId, campaignId, trigger, status: "QUEUED", counts: {} } });
-    await enqueueRun(run.id);
-    return run;
-  }
+  const withNext = <T extends { cron: string | null; timezone: string }>(c: T) => ({ ...c, nextRunAt: nextRunAt(c.cron, c.timezone) });
 
   r.get("/campaigns", { ...auth, schema: { tags: ["campaigns"] } }, async (req) => {
     const items = await prisma.campaign.findMany({
@@ -35,35 +30,48 @@ export const campaignRoutes: FastifyPluginAsync = async (app) => {
       orderBy: { createdAt: "desc" },
       include: { runs: { orderBy: { createdAt: "desc" }, take: 1 }, _count: { select: { leads: true } } },
     });
-    return { items };
+    return { items: items.map(withNext) };
   });
 
   r.post("/campaigns", { ...auth, schema: { body: campaignCreateSchema, tags: ["campaigns"] } }, async (req, reply) => {
-    const c = await prisma.campaign.create({ data: { ...req.body, workspaceId: req.auth.workspaceId, status: "ACTIVE" } });
-    return reply.status(201).send(c);
+    const cron = req.body.cron || null;
+    if (cron) assertValidCron(cron, req.body.timezone ?? "UTC");
+    const c = await prisma.campaign.create({ data: { ...req.body, cron, workspaceId: req.auth.workspaceId, status: "ACTIVE" } });
+    await syncCampaignSchedule(c);
+    return reply.status(201).send(withNext(c));
   });
 
   r.get("/campaigns/:id", { ...auth, schema: { params: idParam, tags: ["campaigns"] } }, async (req) => {
     await getCampaign(req.auth.workspaceId, req.params.id);
-    return prisma.campaign.findFirstOrThrow({
+    const c = await prisma.campaign.findFirstOrThrow({
       where: { id: req.params.id, workspaceId: req.auth.workspaceId },
       include: { runs: { orderBy: { createdAt: "desc" }, take: 20 }, _count: { select: { leads: true } } },
     });
+    return withNext(c);
   });
 
   r.patch("/campaigns/:id", { ...auth, schema: { params: idParam, body: campaignUpdateSchema, tags: ["campaigns"] } }, async (req) => {
-    await getCampaign(req.auth.workspaceId, req.params.id);
-    return prisma.campaign.update({ where: { id: req.params.id }, data: req.body });
+    const current = await getCampaign(req.auth.workspaceId, req.params.id);
+    const cron = req.body.cron === undefined ? current.cron : req.body.cron || null;
+    const timezone = req.body.timezone ?? current.timezone;
+    if (cron) assertValidCron(cron, timezone);
+    const c = await prisma.campaign.update({ where: { id: current.id }, data: { ...req.body, cron, timezone } });
+    await syncCampaignSchedule(c);
+    return withNext(c);
   });
 
   r.post("/campaigns/:id/pause", { ...auth, schema: { params: idParam, tags: ["campaigns"] } }, async (req) => {
     await getCampaign(req.auth.workspaceId, req.params.id);
-    return prisma.campaign.update({ where: { id: req.params.id }, data: { status: "PAUSED" } });
+    const c = await prisma.campaign.update({ where: { id: req.params.id }, data: { status: "PAUSED" } });
+    await syncCampaignSchedule(c); // a paused campaign stops its schedule
+    return withNext(c);
   });
 
   r.post("/campaigns/:id/resume", { ...auth, schema: { params: idParam, tags: ["campaigns"] } }, async (req) => {
     await getCampaign(req.auth.workspaceId, req.params.id);
-    return prisma.campaign.update({ where: { id: req.params.id }, data: { status: "ACTIVE" } });
+    const c = await prisma.campaign.update({ where: { id: req.params.id }, data: { status: "ACTIVE" } });
+    await syncCampaignSchedule(c);
+    return withNext(c);
   });
 
   r.post("/campaigns/:id/run", { ...auth, schema: { params: idParam, tags: ["campaigns"] } }, async (req, reply) => {

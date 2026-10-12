@@ -25,6 +25,9 @@ import { draftRoutes } from "./routes/drafts.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { sendingRoutes } from "./routes/sending.js";
 import { publicRoutes } from "./routes/public.js";
+import { pipelineRoutes } from "./routes/pipeline.js";
+import { dashboardRoutes } from "./routes/dashboard.js";
+import { triggerRoutes } from "./routes/trigger.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -115,6 +118,9 @@ export async function buildApp() {
       await api.register(draftRoutes);
       await api.register(settingsRoutes);
       await api.register(sendingRoutes);
+      await api.register(pipelineRoutes);
+      await api.register(dashboardRoutes);
+      await api.register(triggerRoutes);
     },
     { prefix: "/api/v1" },
   );

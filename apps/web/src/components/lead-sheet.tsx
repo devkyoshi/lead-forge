@@ -6,12 +6,11 @@ import { LEAD_STATUSES } from "@leadforge/shared";
 import { api, type LeadDetail } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { ScoreBadge } from "@/components/score-badge";
+import { ActivityTimeline } from "@/components/activity-timeline";
+import { NEEDS_DETAILS, StatusChangeDialog } from "@/components/status-change-dialog";
 import { StatusBadge, humanize } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,8 +45,7 @@ export function LeadSheet({
   // Pending status change that needs extra input (reason / project details).
   const [pending, setPending] = useState<string | null>(null);
   const [emails, setEmails] = useState<EmailThread | null>(null);
-  const [reason, setReason] = useState("");
-  const [project, setProject] = useState({ name: "", value: "", notes: "", expectedStart: "" });
+  const [timelineKey, setTimelineKey] = useState(0);
 
   const load = useCallback(async () => {
     if (!leadId) return;
@@ -100,9 +98,9 @@ export function LeadSheet({
   async function changeStatus(status: string, extra: Record<string, unknown> = {}) {
     try {
       await api(`/leads/${leadId}/status`, { method: "POST", json: { status, ...extra } });
-      toast.success(`Moved to ${status}`);
+      toast.success(`Moved to ${humanize(status)}`);
       setPending(null);
-      setReason("");
+      setTimelineKey((k) => k + 1);
       await load();
       onChanged();
     } catch (e) {
@@ -112,7 +110,7 @@ export function LeadSheet({
 
   function requestStatus(status: string | null) {
     if (!status || status === lead?.status) return;
-    if (["LOST", "NOT_INTERESTED", "CONFIRMED"].includes(status)) setPending(status);
+    if (NEEDS_DETAILS.includes(status)) setPending(status);
     else changeStatus(status);
   }
 
@@ -275,6 +273,17 @@ export function LeadSheet({
                   </div>
                 </TabsContent>
                 <TabsContent value="checklist" className="space-y-2">
+                  <div className="mb-3 space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Progress</span>
+                      <span className="tabular-nums">
+                        {lead.checklist.filter((c) => c.done).length} of {lead.checklist.length}
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted">
+                      <div className="h-1.5 rounded-full bg-primary transition-all" style={{ width: `${lead.checklist.length ? (lead.checklist.filter((c) => c.done).length / lead.checklist.length) * 100 : 0}%` }} />
+                    </div>
+                  </div>
                   {lead.checklist.map((c) => (
                     <label key={c.id} className="flex items-center gap-2 text-sm">
                       <Checkbox checked={c.done} onCheckedChange={(v) => toggle(c.key, v === true)} />
@@ -282,19 +291,8 @@ export function LeadSheet({
                     </label>
                   ))}
                 </TabsContent>
-                <TabsContent value="timeline" className="space-y-3">
-                  {lead.history.map((h) => (
-                    <div key={h.id} className="text-sm">
-                      <div>
-                        {h.fromStatus ? `${h.fromStatus} → ` : ""}
-                        <strong>{h.toStatus}</strong>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {h.actor === "system" ? "system" : "user"} · {new Date(h.createdAt).toLocaleString()}
-                        {h.reason ? ` · ${h.reason}` : ""}
-                      </div>
-                    </div>
-                  ))}
+                <TabsContent value="timeline">
+                  <ActivityTimeline leadId={lead.id} refreshKey={timelineKey} />
                 </TabsContent>
                 <TabsContent value="notes" className="space-y-3">
                   <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note..." />
@@ -314,56 +312,12 @@ export function LeadSheet({
         </SheetContent>
       </Sheet>
 
-      <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{pending === "CONFIRMED" ? "Project details" : `Why ${pending}?`}</DialogTitle>
-          </DialogHeader>
-          {pending === "CONFIRMED" ? (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label>Project name</Label>
-                <Input value={project.name} onChange={(e) => setProject({ ...project, name: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Value</Label>
-                <Input type="number" value={project.value} onChange={(e) => setProject({ ...project, value: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Expected start</Label>
-                <Input type="date" value={project.expectedStart} onChange={(e) => setProject({ ...project, expectedStart: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Notes</Label>
-                <Textarea value={project.notes} onChange={(e) => setProject({ ...project, notes: e.target.value })} />
-              </div>
-              <Button
-                className="w-full"
-                disabled={!project.name.trim()}
-                onClick={() =>
-                  changeStatus("CONFIRMED", {
-                    project: {
-                      name: project.name,
-                      value: project.value ? Number(project.value) : undefined,
-                      notes: project.notes || undefined,
-                      expectedStart: project.expectedStart || undefined,
-                    },
-                  })
-                }
-              >
-                Confirm deal
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" />
-              <Button className="w-full" disabled={!reason.trim()} onClick={() => changeStatus(pending!, { reason })}>
-                Save
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <StatusChangeDialog
+        status={pending}
+        leadName={lead?.name}
+        onCancel={() => setPending(null)}
+        onSubmit={(status, extra) => changeStatus(status, extra as Record<string, unknown>)}
+      />
     </>
   );
 }

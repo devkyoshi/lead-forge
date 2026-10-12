@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sidebar,
@@ -257,7 +258,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <DevMenu />
           </div>
         </header>
-        <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 md:px-8">{children}</div>
+        {/* The kanban board uses the full width; everything else stays in a readable column. */}
+        <div className={cn("mx-auto w-full space-y-6 px-4 py-6 md:px-8", pathname.startsWith("/pipeline") ? "max-w-none" : "max-w-7xl")}>{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

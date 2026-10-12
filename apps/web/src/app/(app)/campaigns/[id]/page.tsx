@@ -2,22 +2,42 @@
 
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { History, Users } from "lucide-react";
 import { api, type Campaign, type Run } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
+import { SchedulePicker, describeCron, browserTimezone, type Schedule } from "@/components/schedule-picker";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge, humanize } from "@/components/status-badge";
 
 export default function CampaignDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [c, setC] = useState<Campaign | null>(null);
+  const [schedule, setSchedule] = useState<Schedule>({ cron: null, timezone: browserTimezone() });
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
-    api<Campaign>(`/campaigns/${id}`).then(setC);
+    api<Campaign>(`/campaigns/${id}`).then((x) => {
+      setC(x);
+      setSchedule({ cron: x.cron, timezone: x.cron ? x.timezone : browserTimezone() });
+    });
   }, [id]);
+
+  async function saveSchedule() {
+    setSaving(true);
+    try {
+      const updated = await api<Campaign>(`/campaigns/${id}`, { method: "PATCH", json: { cron: schedule.cron, timezone: schedule.timezone } });
+      setC((prev) => (prev ? { ...prev, cron: updated.cron, timezone: updated.timezone, nextRunAt: updated.nextRunAt } : prev));
+      toast.success(updated.cron ? "Schedule saved" : "Schedule removed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the schedule");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (!c) {
     return (
@@ -36,7 +56,7 @@ export default function CampaignDetail({ params }: { params: Promise<{ id: strin
         actions={
           <>
             <StatusBadge status={c.status} />
-            <Button variant="outline" render={<Link href="/leads" />}>
+            <Button variant="outline" nativeButton={false} render={<Link href="/leads" />}>
               <Users className="size-4" /> View leads
             </Button>
           </>
@@ -57,6 +77,23 @@ export default function CampaignDetail({ params }: { params: Promise<{ id: strin
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Schedule</CardTitle>
+          <CardDescription>
+            {c.cron
+              ? `${describeCron(c.cron)} (${c.timezone})${c.status === "ACTIVE" && c.nextRunAt ? `. Next run ${new Date(c.nextRunAt).toLocaleString()}` : ". Paused, so it will not run"}`
+              : "Runs only when you click Run now or call the API."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <SchedulePicker value={schedule} onChange={setSchedule} />
+          <Button onClick={saveSchedule} disabled={saving || (schedule.cron === c.cron && (schedule.timezone === c.timezone || !schedule.cron))}>
+            Save schedule
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SchedulePicker, browserTimezone, type Schedule } from "@/components/schedule-picker";
 
 interface Values {
   name: string;
@@ -57,6 +59,7 @@ export function CampaignDialog({
     },
   });
   const mode = watch("mode");
+  const [schedule, setSchedule] = useState<Schedule>({ cron: null, timezone: browserTimezone() });
 
   async function onSubmit(v: Values) {
     const categories = v.categories
@@ -76,6 +79,8 @@ export function CampaignDialog({
           categories,
           filters: v.minRating ? { minRating: Number(v.minRating) } : {},
           dailySendLimit: Number(v.dailySendLimit),
+          cron: schedule.cron,
+          timezone: schedule.timezone,
           approvalMode: v.approvalMode,
           tone: v.tone,
           aiPersonalize: v.aiPersonalize,
@@ -92,6 +97,7 @@ export function CampaignDialog({
       check?.errors.forEach((m) => toast.error(m, { duration: 12000 }));
       check?.warnings.forEach((m) => toast.warning(m, { duration: 12000 }));
       reset();
+      setSchedule({ cron: null, timezone: browserTimezone() });
       onOpenChange(false);
       onCreated();
     } catch (e) {
@@ -174,6 +180,9 @@ export function CampaignDialog({
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" {...register("followups")} /> Follow-ups (+3 days, +7 days; stop on reply, unsubscribe or bounce)
           </label>
+          <div className="rounded-lg border p-3">
+            <SchedulePicker value={schedule} onChange={setSchedule} />
+          </div>
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             Create campaign
           </Button>
