@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import { TEMPLATE_VARIABLES, TONES } from "@leadforge/shared";
 import { api, type Lead } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
+import { humanize } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -147,24 +150,27 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Templates</h1>
-        <Button onClick={startNew}>
-          <Plus className="size-4" /> New template
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Templates"
+        description="Reusable email copy with variables. Each save creates a new version, and the preview uses a real lead so you see exactly what will be sent."
+        actions={
+          <Button onClick={startNew}>
+            <Plus className="size-4" /> New template
+          </Button>
+        }
+      />
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         <div className="space-y-2">
           {templates.map((t) => (
             <button
               key={t.id}
               onClick={() => select(t)}
-              className={`w-full rounded-md border p-3 text-left text-sm hover:bg-muted ${selected === t.id ? "bg-muted" : ""}`}
+              className={`w-full rounded-lg border p-3 text-left text-sm transition-colors hover:bg-muted/60 ${selected === t.id ? "border-primary/40 bg-brand-soft" : "bg-card"}`}
             >
               <div className="font-medium">{t.name}</div>
               <div className="mt-1 flex gap-1">
-                <Badge variant="outline">{t.scenario.replace("_", " ")}</Badge>
+                <Badge variant="outline">{humanize(t.scenario)}</Badge>
                 <Badge variant="secondary">{t.category}</Badge>
               </div>
             </button>
@@ -282,7 +288,7 @@ export default function TemplatesPage() {
                   <Checkbox checked={ai} onCheckedChange={(v) => setAi(v === true)} /> AI personalize
                 </label>
               </div>
-              <div className="rounded-md border p-4">
+              <div className="rounded-xl border bg-card p-5 shadow-xs">
                 {preview ? (
                   <>
                     <p className="text-sm text-muted-foreground">Subject</p>
@@ -300,7 +306,9 @@ export default function TemplatesPage() {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Select a template to edit it, or create a new one.</p>
+          <div className="rounded-xl border border-dashed bg-card">
+            <EmptyState icon={FileText} title="Select a template" hint="Pick one on the left to edit it and preview it against a real lead, or create a new template." />
+          </div>
         )}
       </div>
     </div>

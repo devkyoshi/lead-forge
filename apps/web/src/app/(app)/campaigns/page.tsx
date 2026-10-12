@@ -4,13 +4,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Play, Plus } from "lucide-react";
+import { Megaphone, Pause, Play, Plus } from "lucide-react";
 import { api, type Campaign, type Run } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CampaignDialog } from "@/components/campaign-dialog";
+import { DataTableShell } from "@/components/data-table-shell";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import { StatusBadge } from "@/components/status-badge";
 
 export default function CampaignsPage() {
   const router = useRouter();
@@ -44,21 +48,23 @@ export default function CampaignsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Campaigns</h1>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="size-4" /> New campaign
-        </Button>
-      </div>
-      <div className="rounded-md border">
+    <>
+      <PageHeader
+        title="Campaigns"
+        description="A campaign defines where to look, which kinds of business, and how to reach them. Run it to discover, audit and score new leads."
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="size-4" /> New campaign
+          </Button>
+        }
+      />
+      <DataTableShell>
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Area</TableHead>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Campaign</TableHead>
               <TableHead>Categories</TableHead>
-              <TableHead>Leads</TableHead>
+              <TableHead className="text-right">Leads</TableHead>
               <TableHead>Last run</TableHead>
               <TableHead>Status</TableHead>
               <TableHead />
@@ -66,15 +72,26 @@ export default function CampaignsPage() {
           </TableHeader>
           <TableBody>
             {!items ? (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <Skeleton className="h-8 w-full" />
-                </TableCell>
-              </TableRow>
+              Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell colSpan={6}>
+                    <Skeleton className="h-9 w-full" />
+                  </TableCell>
+                </TableRow>
+              ))
             ) : items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                  No campaigns yet. Create one to start finding leads.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={6}>
+                  <EmptyState
+                    icon={Megaphone}
+                    title="No campaigns yet"
+                    hint="Create a campaign for an area and a few categories, then click Run now to find your first leads."
+                    action={
+                      <Button onClick={() => setCreating(true)}>
+                        <Plus className="size-4" /> New campaign
+                      </Button>
+                    }
+                  />
                 </TableCell>
               </TableRow>
             ) : (
@@ -82,39 +99,51 @@ export default function CampaignsPage() {
                 const last = c.runs[0];
                 return (
                   <TableRow key={c.id}>
-                    <TableCell className="font-medium">
-                      <Link href={`/campaigns/${c.id}`} className="hover:underline">
+                    <TableCell>
+                      <Link href={`/campaigns/${c.id}`} className="font-medium hover:text-primary hover:underline">
                         {c.name}
                       </Link>
+                      <div className="text-xs text-muted-foreground">{c.area.label}</div>
                     </TableCell>
-                    <TableCell>{c.area.label}</TableCell>
-                    <TableCell className="space-x-1">
-                      {c.categories.map((k) => (
-                        <Badge key={k} variant="outline">
-                          {k}
-                        </Badge>
-                      ))}
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {c.categories.map((k) => (
+                          <Badge key={k} variant="outline" className="capitalize">
+                            {k}
+                          </Badge>
+                        ))}
+                      </div>
                     </TableCell>
-                    <TableCell>{c._count.leads}</TableCell>
+                    <TableCell className="text-right tabular-nums">{c._count.leads}</TableCell>
                     <TableCell>
                       {last ? (
-                        <Link href={`/runs/${last.id}`} className="hover:underline">
-                          {last.status}
+                        <Link href={`/runs/${last.id}`} aria-label="Open last run">
+                          <StatusBadge status={last.status} />
                         </Link>
                       ) : (
-                        "-"
+                        <span className="text-muted-foreground">Never run</span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={c.status === "ACTIVE" ? "default" : "secondary"}>{c.status}</Badge>
+                      <StatusBadge status={c.status} />
                     </TableCell>
-                    <TableCell className="space-x-2 text-right">
-                      <Button size="sm" variant="outline" onClick={() => toggle(c)}>
-                        {c.status === "PAUSED" ? "Resume" : "Pause"}
-                      </Button>
-                      <Button size="sm" onClick={() => runNow(c.id)}>
-                        <Play className="size-4" /> Run now
-                      </Button>
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" onClick={() => toggle(c)}>
+                          {c.status === "PAUSED" ? (
+                            <>
+                              <Play className="size-3.5" /> Resume
+                            </>
+                          ) : (
+                            <>
+                              <Pause className="size-3.5" /> Pause
+                            </>
+                          )}
+                        </Button>
+                        <Button size="sm" onClick={() => runNow(c.id)}>
+                          <Play className="size-3.5" /> Run now
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -122,8 +151,8 @@ export default function CampaignsPage() {
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableShell>
       <CampaignDialog open={creating} onOpenChange={setCreating} onCreated={load} />
-    </div>
+    </>
   );
 }

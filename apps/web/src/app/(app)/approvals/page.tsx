@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, RefreshCw, X } from "lucide-react";
+import { Check, CheckSquare, RefreshCw, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableShell } from "@/components/data-table-shell";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import { ScoreBadge } from "@/components/score-badge";
+import { StatusBadge } from "@/components/status-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -117,9 +122,12 @@ export default function ApprovalsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Approval queue</h1>
+      <PageHeader
+        title="Approval queue"
+        description="Review each drafted email, edit it if you like, then approve it. Approved emails send within your daily limits and send window."
+      />
       {sendStatus && (
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md border p-3 text-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-card p-4 text-sm shadow-xs">
           <span>Sent today: <strong>{sendStatus.sentToday}</strong> / {sendStatus.dailyCap}</span>
           <span>Last hour: <strong>{sendStatus.sentLastHour}</strong> / {sendStatus.hourlyLimit}</span>
           <span>{sendStatus.inSendWindow ? "Inside send window" : <span className="text-amber-600 dark:text-amber-400">Outside send window</span>}</span>
@@ -153,7 +161,7 @@ export default function ApprovalsPage() {
         </div>
       </div>
 
-      <div className="rounded-md border">
+      <DataTableShell>
         <Table>
           <TableHeader>
             <TableRow>
@@ -178,8 +186,12 @@ export default function ApprovalsPage() {
               </TableRow>
             ) : items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                  Nothing here.
+                <TableCell colSpan={5}>
+                  <EmptyState
+                    icon={CheckSquare}
+                    title="Nothing here"
+                    hint={status === "PENDING_REVIEW" ? "New drafts appear here after a campaign run, or when you queue emails from the Leads page." : "No drafts with this status."}
+                  />
                 </TableCell>
               </TableRow>
             ) : (
@@ -190,8 +202,9 @@ export default function ApprovalsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="font-medium">{d.lead.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      score {d.lead.score} · {d.lead.websiteStatus.replace("_", " ")}
+                    <div className="mt-1 flex items-center gap-2">
+                      <ScoreBadge score={d.lead.score} />
+                      <StatusBadge status={d.lead.websiteStatus} />
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">{d.lead.contacts[0]?.value ?? "-"}</TableCell>
@@ -204,7 +217,7 @@ export default function ApprovalsPage() {
             )}
           </TableBody>
         </Table>
-      </div>
+      </DataTableShell>
 
       <Dialog open={!!open} onOpenChange={(o) => !o && setOpen(null)}>
         <DialogContent className="max-w-2xl">

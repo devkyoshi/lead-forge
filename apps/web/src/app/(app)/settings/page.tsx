@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 import { DEFAULT_CHECKLIST } from "@leadforge/shared";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -128,7 +129,7 @@ function SenderAndSending() {
           <Field label="Jurisdiction notes (CAN-SPAM / GDPR / local rules)" hint="Your own notes. Campaigns targeting opt-in regions show a warning before sending.">
             <Textarea rows={5} {...text("jurisdictionNotes")} />
           </Field>
-          <div className="rounded-md border p-3 text-xs text-muted-foreground">
+          <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
             <p>Providers (set in .env): email = {ws.emailProvider}, AI = {ws.aiProvider}, places = {ws.placesProvider}</p>
             <p className="mt-1 break-all">SendGrid event webhook: {ws.eventWebhookUrl}</p>
             <p className="break-all">SendGrid inbound parse (replies): {ws.inboundWebhookUrl}</p>
@@ -224,7 +225,7 @@ function Suppression() {
           <Input placeholder="name@company.com or company.com (paste many, separated by commas or spaces)" value={text} onChange={(e) => setText(e.target.value)} />
           <Button onClick={add}>Add</Button>
         </div>
-        <div className="max-h-96 divide-y overflow-auto rounded-md border">
+        <div className="max-h-96 divide-y overflow-auto rounded-lg border">
           {items.length === 0 && <p className="p-3 text-sm text-muted-foreground">Nothing suppressed yet.</p>}
           {items.map((s) => (
             <div key={s.id} className="flex items-center justify-between px-3 py-2 text-sm">
@@ -351,8 +352,8 @@ function Checklist() {
 
 export default function SettingsPage() {
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+    <div className="space-y-6">
+      <PageHeader title="Settings" description="Who your emails come from, how fast they go out, how leads are scored, and who must never be contacted." />
       <Tabs defaultValue="sender">
         <TabsList className="flex-wrap">
           <TabsTrigger value="sender">Sender &amp; limits</TabsTrigger>

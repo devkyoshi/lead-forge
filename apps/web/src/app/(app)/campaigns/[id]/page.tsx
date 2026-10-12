@@ -2,9 +2,15 @@
 
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
+import { History, Users } from "lucide-react";
 import { api, type Campaign, type Run } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import { StatusBadge, humanize } from "@/components/status-badge";
 
 export default function CampaignDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -12,37 +18,77 @@ export default function CampaignDetail({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     api<Campaign>(`/campaigns/${id}`).then(setC);
   }, [id]);
-  if (!c) return null;
-  return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">{c.name}</h1>
-      <p className="text-sm text-muted-foreground">
-        {c.area.label} · {c.categories.join(", ")} · {c._count.leads} leads · {c.approvalMode}
-      </p>
-      <Button variant="outline" render={<Link href="/leads" />}>
-        View leads
-      </Button>
-      <h2 className="pt-2 text-lg font-medium">Run history</h2>
-      <div className="space-y-2">
-        {c.runs.map((r: Run) => (
-          <Link
-            key={r.id}
-            href={`/runs/${r.id}`}
-            className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-muted"
-          >
-            <span>
-              {new Date(r.createdAt).toLocaleString()} · {r.trigger}
-            </span>
-            <span className="flex items-center gap-3">
-              <span className="text-muted-foreground">
-                {r.counts.new ?? 0} new / {r.counts.qualified ?? 0} qualified
-              </span>
-              <Badge variant={r.status === "FAILED" ? "destructive" : "secondary"}>{r.status}</Badge>
-            </span>
-          </Link>
-        ))}
-        {c.runs.length === 0 && <p className="text-sm text-muted-foreground">No runs yet.</p>}
+
+  if (!c) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-40 w-full" />
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader
+        title={c.name}
+        description={`${c.area.label} · ${c.categories.join(", ")}`}
+        actions={
+          <>
+            <StatusBadge status={c.status} />
+            <Button variant="outline" render={<Link href="/leads" />}>
+              <Users className="size-4" /> View leads
+            </Button>
+          </>
+        }
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[
+          ["Leads found", String(c._count.leads)],
+          ["Approval mode", humanize(c.approvalMode)],
+          ["Daily send limit", String(c.dailySendLimit)],
+        ].map(([label, value]) => (
+          <Card key={label}>
+            <CardHeader className="pb-1">
+              <CardTitle className="text-sm font-normal text-muted-foreground">{label}</CardTitle>
+            </CardHeader>
+            <CardContent className="text-2xl font-semibold tabular-nums">{value}</CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Run history</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {c.runs.length === 0 ? (
+            <EmptyState icon={History} title="No runs yet" hint="Use Run now on the Campaigns page to start the first run." />
+          ) : (
+            <ul className="divide-y">
+              {c.runs.map((r: Run) => (
+                <li key={r.id}>
+                  <Link href={`/runs/${r.id}`} className="flex flex-wrap items-center justify-between gap-2 px-6 py-3 text-sm transition-colors hover:bg-muted/40">
+                    <span>
+                      {new Date(r.createdAt).toLocaleString()}
+                      <Badge variant="outline" className="ml-2">
+                        {humanize(r.trigger)}
+                      </Badge>
+                    </span>
+                    <span className="flex items-center gap-4">
+                      <span className="text-muted-foreground tabular-nums">
+                        {r.counts.new ?? 0} new · {r.counts.qualified ?? 0} qualified · {r.counts.drafted ?? 0} drafted
+                      </span>
+                      <StatusBadge status={r.status} />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </>
   );
 }

@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { LEAD_STATUSES } from "@leadforge/shared";
 import { api, type LeadDetail } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { ScoreBadge } from "@/components/score-badge";
+import { StatusBadge, humanize } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -142,16 +144,16 @@ export function LeadSheet({
           ) : (
             <div className="space-y-4 p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge>{lead.score}</Badge>
-                <Badge variant="outline">{lead.websiteStatus.replace("_", " ")}</Badge>
+                <ScoreBadge score={lead.score} />
+                <StatusBadge status={lead.websiteStatus} />
                 <Select value={lead.status} onValueChange={requestStatus}>
-                  <SelectTrigger className="w-44">
-                    <SelectValue />
+                  <SelectTrigger className="w-48">
+                    <SelectValue>{humanize(lead.status)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {LEAD_STATUSES.map((s) => (
                       <SelectItem key={s} value={s}>
-                        {s}
+                        {humanize(s)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -233,7 +235,7 @@ export function LeadSheet({
                   ) : (
                     <>
                       {emails.messages.map((m) => (
-                        <div key={m.id} className={`rounded-md border p-2 text-sm ${m.direction === "IN" ? "border-primary/50" : ""}`}>
+                        <div key={m.id} className={`rounded-lg border p-3 text-sm ${m.direction === "IN" ? "border-primary/40 bg-brand-soft" : "bg-card"}`}>
                           <div className="flex justify-between">
                             <strong>{m.direction === "IN" ? "Reply received" : (m.draft?.subject ?? "Email")}</strong>
                             <span className="text-xs text-muted-foreground">{m.sentAt ? new Date(m.sentAt).toLocaleString() : m.status}</span>
@@ -253,10 +255,10 @@ export function LeadSheet({
                         </div>
                       ))}
                       {emails.drafts.map((d) => (
-                        <div key={d.id} className="rounded-md border border-dashed p-2 text-sm">
+                        <div key={d.id} className="rounded-lg border border-dashed p-3 text-sm">
                           <div className="flex justify-between">
                             <span>{d.subject}</span>
-                            <Badge variant="secondary">{d.status.replace("_", " ").toLowerCase()}</Badge>
+                            <StatusBadge status={d.status} />
                           </div>
                           {d.lastError && <p className="text-xs text-muted-foreground">{d.lastError}</p>}
                         </div>
@@ -300,7 +302,7 @@ export function LeadSheet({
                     Add note
                   </Button>
                   {lead.notes.map((n) => (
-                    <div key={n.id} className="rounded-md border p-2 text-sm">
+                    <div key={n.id} className="rounded-lg border bg-card p-3 text-sm">
                       <p className="whitespace-pre-wrap">{n.body}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{new Date(n.createdAt).toLocaleString()}</p>
                     </div>
