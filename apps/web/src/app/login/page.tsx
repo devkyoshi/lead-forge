@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { loginSchema, type LoginInput } from "@leadforge/shared";
 import { api } from "@/lib/api";
+import { DevMenu } from "@/components/dev-menu";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
 
@@ -30,6 +32,14 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
+      <div className="fixed right-4 top-4">
+        <DevMenu
+          onFillLogin={(email, password) => {
+            setValue("email", email, { shouldValidate: true });
+            setValue("password", password, { shouldValidate: true });
+          }}
+        />
+      </div>
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>LeadForge</CardTitle>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { Bug, Check, ClipboardCopy, ExternalLink, Moon, Send, Sun } from "lucide-react";
+import { Bug, Check, ClipboardCopy, ExternalLink, LogIn, Moon, Send, Sun } from "lucide-react";
 import { api } from "@/lib/api";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -36,8 +36,11 @@ async function copy(text: string, label: string) {
   }
 }
 
-/** Developer shortcuts. Rendered only when NODE_ENV is not production. */
-export function DevMenu() {
+/**
+ * Developer shortcuts. Rendered only when NODE_ENV is not production.
+ * On the login page, pass `onFillLogin` to get a one-click "fill demo login" item.
+ */
+export function DevMenu({ onFillLogin }: { onFillLogin?: (email: string, password: string) => void }) {
   const { resolvedTheme, setTheme } = useTheme();
   const [providers, setProviders] = useState<Providers | null>(null);
   const [apiUp, setApiUp] = useState<boolean | null>(null);
@@ -85,6 +88,11 @@ export function DevMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuLabel>Demo login</DropdownMenuLabel>
+          {onFillLogin && (
+            <DropdownMenuItem onClick={() => onFillLogin(DEMO.email, DEMO.password)}>
+              <LogIn className="size-4" /> Fill login form
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => copy(DEMO.email, "Email")}>
             <ClipboardCopy className="size-4" /> Copy email
           </DropdownMenuItem>
@@ -95,9 +103,11 @@ export function DevMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-          <DropdownMenuItem onClick={runDispatcher}>
-            <Send className="size-4" /> Run email dispatcher now
-          </DropdownMenuItem>
+          {!onFillLogin && (
+            <DropdownMenuItem onClick={runDispatcher}>
+              <Send className="size-4" /> Run email dispatcher now
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
             {resolvedTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />} Toggle theme
           </DropdownMenuItem>
