@@ -18,6 +18,8 @@ import { prisma } from "./db.js";
 import { HttpError } from "./services/leads.js";
 import { authRoutes } from "./routes/auth.js";
 import { leadRoutes } from "./routes/leads.js";
+import { campaignRoutes } from "./routes/campaigns.js";
+import { mockSiteRoutes } from "./routes/mock-sites.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -78,6 +80,7 @@ export async function buildApp() {
   });
 
   app.get("/health", async () => ({ ok: true }));
+  if (env.PLACES_PROVIDER === "mock") await app.register(mockSiteRoutes);
   app.get("/ready", async () => {
     await prisma.$queryRaw`SELECT 1`;
     return { ok: true };
@@ -87,6 +90,7 @@ export async function buildApp() {
     async (api) => {
       await api.register(authRoutes);
       await api.register(leadRoutes);
+      await api.register(campaignRoutes);
     },
     { prefix: "/api/v1" },
   );

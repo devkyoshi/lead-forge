@@ -275,6 +275,7 @@ model Lead {
   websiteStatus       WebsiteStatus @default(UNKNOWN)
   websiteScore        Int?
   needsManualOutreach Boolean       @default(false)
+  enrichedAt          DateTime?
   assignedTo          String?
   tags                String[]
   project             Json?

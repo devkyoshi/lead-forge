@@ -112,12 +112,71 @@ export function LeadSheet({
                 {[lead.phone, lead.category, lead.area].filter(Boolean).join(" · ")}
               </div>
 
-              <Tabs defaultValue="checklist">
+              <Tabs defaultValue="audit">
                 <TabsList>
+                  <TabsTrigger value="audit">Audit &amp; score</TabsTrigger>
                   <TabsTrigger value="checklist">Checklist</TabsTrigger>
                   <TabsTrigger value="timeline">Timeline</TabsTrigger>
                   <TabsTrigger value="notes">Notes</TabsTrigger>
                 </TabsList>
+                <TabsContent value="audit" className="space-y-4">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">Score breakdown</h4>
+                    {lead.scoreBreakdown?.length ? (
+                      lead.scoreBreakdown.map((b) => (
+                        <div key={b.key} className="text-sm">
+                          <div className="flex justify-between">
+                            <span>{b.label}</span>
+                            <span className="text-muted-foreground">
+                              {b.points} / {b.max}
+                            </span>
+                          </div>
+                          <div className="h-1.5 rounded bg-muted">
+                            <div
+                              className="h-1.5 rounded bg-primary"
+                              style={{ width: `${b.max ? Math.min(100, (b.points / b.max) * 100) : 0}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-muted-foreground">{b.detail}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Not scored yet.</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">Website issues</h4>
+                    {lead.websiteUrl && <p className="break-all text-xs text-muted-foreground">{lead.websiteUrl}</p>}
+                    {lead.audits[0]?.issues.length ? (
+                      <ul className="list-disc space-y-1 pl-5 text-sm">
+                        {lead.audits[0].issues.map((i) => (
+                          <li key={i.code}>{i.message}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {lead.audits.length ? "No issues found." : "Not audited yet."}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium">Contacts</h4>
+                    {lead.contacts?.length ? (
+                      (lead.contacts as { id: string; value: string; source: string | null; confidence: number | null }[]).map((c) => (
+                        <div key={c.id} className="text-sm">
+                          {c.value}{" "}
+                          <span className="text-xs text-muted-foreground">
+                            ({c.source}, confidence {c.confidence ?? "n/a"})
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No public email found. Needs manual outreach (phone / WhatsApp / DM).
+                      </p>
+                    )}
+                  </div>
+                </TabsContent>
                 <TabsContent value="checklist" className="space-y-2">
                   {lead.checklist.map((c) => (
                     <label key={c.id} className="flex items-center gap-2 text-sm">

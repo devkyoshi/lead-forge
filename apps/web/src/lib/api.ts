@@ -46,10 +46,46 @@ export interface Lead {
   tags: string[];
   createdAt: string;
   contacts?: { value: string }[];
+  needsManualOutreach?: boolean;
 }
 
 export interface LeadDetail extends Lead {
+  scoreBreakdown: { key: string; label: string; points: number; max: number; detail: string }[] | null;
+  audits: { websiteStatus: string; websiteScore: number | null; issues: { code: string; message: string }[]; fetchedAt: string }[];
   checklist: { id: string; key: string; label: string; done: boolean }[];
   history: { id: string; fromStatus: string | null; toStatus: string; actor: string; reason: string | null; createdAt: string }[];
   notes: { id: string; body: string; createdAt: string }[];
+}
+
+export interface StageLog {
+  id: string;
+  stage: string;
+  status: string;
+  counts: Record<string, number>;
+  logs: string[];
+  error: string | null;
+}
+
+export interface Run {
+  id: string;
+  status: string;
+  trigger: string;
+  currentStage: string | null;
+  counts: Record<string, number>;
+  error: string | null;
+  createdAt: string;
+  stages?: StageLog[];
+  campaign?: { id: string; name: string };
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  status: string;
+  categories: string[];
+  area: { type: string; label: string };
+  approvalMode: string;
+  dailySendLimit: number;
+  runs: Run[];
+  _count: { leads: number };
 }
