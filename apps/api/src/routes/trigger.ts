@@ -34,7 +34,7 @@ export const triggerRoutes: FastifyPluginAsync = async (app) => {
    */
   r.post(
     "/trigger/campaigns/:id/run",
-    { schema: { params: z.object({ id: z.string().min(1) }), tags: ["trigger"] } },
+    { schema: { params: z.object({ id: z.string().min(1) }), tags: ["trigger"], security: [{ apiKeyAuth: [] }], description: "Starts a run. Returns 202 with the run id, 409 if a run is already active. Send Idempotency-Key to make retries safe." } },
     async (req, reply) => {
       const key = req.headers["x-api-key"];
       if (typeof key !== "string" || !key) throw new HttpError(401, "Missing x-api-key header");

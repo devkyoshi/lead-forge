@@ -22,6 +22,7 @@ import { changeLeadStatus } from "./leads.js";
 import { generateDraft } from "./drafts.js";
 import { isSuppressed } from "./suppression.js";
 import type { AiProvider } from "../providers/ai.js";
+import { createEnrichmentProvider, type EnrichmentProvider } from "../providers/enrichment.js";
 
 export interface StageCtx {
   runId: string;
@@ -233,7 +234,7 @@ export async function auditStage(ctx: StageCtx): Promise<StageResult> {
 }
 
 /** Finds public emails on the lead's own site (contact page); flags the rest for manual outreach. */
-export async function enrichStage(ctx: StageCtx): Promise<StageResult> {
+export async function enrichStage(ctx: StageCtx, enrichment: EnrichmentProvider = createEnrichmentProvider()): Promise<StageResult> {
   const leads = await prisma.lead.findMany({
     where: { workspaceId: ctx.workspaceId, campaignId: ctx.campaign.id, deletedAt: null, enrichedAt: null, audits: { some: {} } },
     include: { contacts: { where: { type: "EMAIL" } } },
@@ -243,23 +244,14 @@ export async function enrichStage(ctx: StageCtx): Promise<StageResult> {
   await mapLimit(leads, 4, async (lead) => {
     await ctx.checkCancelled();
     let hasEmail = lead.contacts.length > 0;
-    const canFetch = lead.websiteUrl && !isSocialUrl(lead.websiteUrl) && lead.websiteStatus !== "BROKEN";
-    if (!hasEmail && canFetch) {
-      for (const path of ["contact", "contact-us"]) {
-        const url = new URL(path, lead.websiteUrl!.endsWith("/") ? lead.websiteUrl! : `${lead.websiteUrl}/`).toString();
-        const res = await politeFetch(url);
-        if (res.ok) {
-          const emails = extractEmails(res.html);
-          if (emails.length) {
-            await saveEmails(lead, emails, "website-contact-page");
-            hasEmail = true;
-            break;
-          }
-        }
+    if (!hasEmail) {
+      const found = await enrichment.findEmails({ websiteUrl: lead.websiteUrl, websiteStatus: lead.websiteStatus });
+      if (found.length) {
+        await saveEmails(lead, found, found[0]!.source);
+        hasEmail = true;
       }
     }
-    const needsManual = !hasEmail;
-    await prisma.lead.update({ where: { id: lead.id }, data: { enrichedAt: new Date(), needsManualOutreach: needsManual } });
+    await prisma.lead.update({ where: { id: lead.id }, data: { enrichedAt: new Date(), needsManualOutreach: !hasEmail } });
     if (hasEmail) {
       await tickChecklist(ctx.workspaceId, lead.id, ["contact_verified"]);
       withEmail++;

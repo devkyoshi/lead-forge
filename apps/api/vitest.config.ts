@@ -3,6 +3,7 @@ import { defineConfig } from "vitest/config";
 // Unit tests must not need a .env or running services: give the env validator safe dummy values.
 export default defineConfig({
   test: {
+    exclude: ["**/node_modules/**", "**/*.int.test.ts"],
     env: {
       NODE_ENV: "test",
       DATABASE_URL: "postgresql://test:test@localhost:5432/test",

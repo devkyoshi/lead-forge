@@ -161,7 +161,7 @@ export default function CampaignsPage() {
           </TableBody>
         </Table>
       </DataTableShell>
-      <CampaignDialog open={creating} onOpenChange={setCreating} onCreated={load} />
+      <CampaignDialog open={creating} onOpenChange={setCreating} onSaved={load} />
     </>
   );
 }

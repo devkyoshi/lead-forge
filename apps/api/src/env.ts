@@ -19,7 +19,14 @@ const schema = z.object({
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-5-5"),
 });
 
-const parsed = schema.safeParse(process.env);
+// Some env-file loaders (Docker's) keep a trailing "# comment" as part of the value; drop it for the enum settings.
+const stripComment = (v: string | undefined) => v?.replace(/\s+#.*$/, "").trim();
+const parsed = schema.safeParse({
+  ...process.env,
+  PLACES_PROVIDER: stripComment(process.env.PLACES_PROVIDER),
+  EMAIL_PROVIDER: stripComment(process.env.EMAIL_PROVIDER),
+  AI_PROVIDER: stripComment(process.env.AI_PROVIDER),
+});
 if (!parsed.success) {
   console.error("Invalid environment configuration:");
   for (const issue of parsed.error.issues) console.error(`  ${issue.path.join(".")}: ${issue.message}`);

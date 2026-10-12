@@ -50,7 +50,7 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
   await app.register(multipart, { limits: { fileSize: 1_000_000, files: 0 } });
 
   // ---- Unsubscribe ----
-  app.get<{ Params: { token: string } }>("/u/:token", async (req, reply) => {
+  app.get<{ Params: { token: string } }>("/u/:token", { schema: { tags: ["public"], security: [], description: "Unsubscribe confirmation page (HTML)" } }, async (req, reply) => {
     const t = verifyUnsubToken(req.params.token);
     reply.type("text/html");
     if (!t) return reply.status(400).send(page("Invalid link", "<h1>This link is not valid</h1><p>It may have been copied incorrectly.</p>"));
@@ -63,7 +63,7 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
     );
   });
 
-  app.post<{ Params: { token: string } }>("/u/:token", async (req, reply) => {
+  app.post<{ Params: { token: string } }>("/u/:token", { schema: { tags: ["public"], security: [], description: "Performs the unsubscribe. Also accepts RFC 8058 one-click POSTs." } }, async (req, reply) => {
     const t = verifyUnsubToken(req.params.token);
     if (!t) return reply.status(400).type("text/html").send(page("Invalid link", "<h1>This link is not valid</h1>"));
     await suppressLead({ workspaceId: t.workspaceId, leadId: t.leadId, reason: "UNSUBSCRIBE", actor: "recipient" });
@@ -71,7 +71,7 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ---- SendGrid Event Webhook ----
-  app.post("/webhooks/sendgrid/events", async (req, reply) => {
+  app.post("/webhooks/sendgrid/events", { schema: { tags: ["public"], security: [], description: "SendGrid Event Webhook. Verified with the ECDSA signature headers." } }, async (req, reply) => {
     const ok = verifySendGridSignature(
       req.rawBody ?? "",
       req.headers["x-twilio-email-event-webhook-signature"] as string | undefined,
@@ -102,7 +102,7 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ---- SendGrid Inbound Parse: replies ----
-  app.post<{ Querystring: { key?: string } }>("/webhooks/sendgrid/inbound", async (req, reply) => {
+  app.post<{ Querystring: { key?: string } }>("/webhooks/sendgrid/inbound", { schema: { tags: ["public"], security: [], description: "SendGrid Inbound Parse (replies). Protected by a secret key in the URL." } }, async (req, reply) => {
     if (req.query.key !== inboundKey()) return reply.status(401).send({ error: "Invalid key" });
     const fields: Record<string, string> = {};
     for await (const part of req.parts()) if (part.type === "field") fields[part.fieldname] = String(part.value);

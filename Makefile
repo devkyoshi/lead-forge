@@ -1,7 +1,7 @@
 # Recipes avoid shell-specific syntax (no test/cp/trap/&) so they work from PowerShell, cmd and bash.
 # Anything non-trivial lives in scripts/*.mjs and runs on Node.
 
-.PHONY: help dev setup install env infra infra-down migrate seed api worker web stop test typecheck build logs db-reset psql
+.PHONY: help dev setup install env infra infra-down migrate seed api worker web stop test test-int typecheck build logs db-reset psql
 
 help: ## Show this help
 	node scripts/help.mjs
@@ -45,8 +45,11 @@ web: ## Run the Next.js app (http://localhost:3000)
 
 # ---- Checks -------------------------------------------------------------------------------
 
-test: ## Run unit tests
+test: ## Run unit tests (no services needed)
 	pnpm test
+
+test-int: infra ## Run integration tests against a throwaway test database (starts Postgres + Redis)
+	pnpm --filter @leadforge/api test:int
 
 typecheck: ## Typecheck all packages
 	pnpm typecheck

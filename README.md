@@ -6,7 +6,7 @@ LeadForge searches an area for businesses (hotels, restaurants, salons, clinics,
 
 Everything runs on mock providers out of the box, so you can try the full flow with **no API keys and no real emails sent**.
 
-> **Status:** Phases 1-5 are built: discovery, audit, scoring, templates, AI drafts, approval queue, sending, webhooks, unsubscribe, follow-ups, settings, the drag-and-drop pipeline board, per-campaign scheduling, the dashboard and a full activity timeline. Still to come: the integration test suite and OpenAPI polish (Phase 6).
+> **Status:** all six build phases are complete and tested. Runs on mock providers out of the box; real Google Places, SendGrid and Anthropic are opt-in (see *Going live*).
 
 ---
 
@@ -199,8 +199,8 @@ These are built in, not optional:
 
 | Page | What it does |
 |------|--------------|
-| **Leads** | Searchable, sortable table with status filter. Bulk "Queue email". The lead sheet shows the audit, score breakdown, contacts, emails, checklist with progress, a full activity timeline (status changes, emails, opens, replies, notes) and notes. |
-| **Campaigns** | Create, run, pause and resume, and set a schedule. Run pages show live stage progress, counts and logs, with cancel and resume. |
+| **Leads** | Searchable, sortable table with filters (status, website, campaign, category, score, tag). Bulk actions: queue email, change status, tag. Export the filtered list to CSV. The lead sheet shows the audit, score breakdown, contacts, emails, checklist with progress, a full activity timeline (status changes, emails, opens, replies, notes), notes, tags and who it is assigned to. |
+| **Campaigns** | Create, edit, run, pause and resume, and set a schedule. Pick a template (or let the app match one per lead). Run pages show live stage progress, counts and logs, with cancel and resume. |
 | **Templates** | Versioned editor with variable picker, live preview against a real lead, tone and AI toggle, and "send test to me". |
 | **Approval queue** | Review, edit, approve, reject or regenerate drafts in bulk. Shows today's send count against the limit. |
 | **Pipeline** | Kanban board of every lead by stage. Drag a card to change its stage. Moving to *Confirmed* asks for project details; *Lost* and *Not interested* ask for a reason. Unsubscribed and bounced leads are locked. |
@@ -225,6 +225,8 @@ apps/
   web/        Next.js app (App Router, Tailwind, shadcn/ui)
 packages/
   shared/     Zod schemas, scoring, audit analysis, template rendering, status rules, tests
+scripts/              Cross-platform helpers behind the Makefile (run-all, stop, env, help)
+apps/api/test/        Integration-test global setup (creates a throwaway test database)
 docker-compose.yml   PostgreSQL, Redis (and optional api / worker / web images)
 Makefile             Developer commands
 ```
@@ -232,12 +234,18 @@ Makefile             Developer commands
 ## Tests and checks
 
 ```bash
-make test        # unit tests (scoring, dedupe keys, rendering, AI guard, transitions, limits)
+make test        # unit tests, no services needed
+make test-int    # integration tests (starts Postgres + Redis, uses a throwaway database)
 make typecheck   # all packages
 make build       # production build of the web app
 ```
 
-An integration test for a full run with mocked providers, and generated OpenAPI polish, are planned for Phase 6.
+- **Unit tests** cover scoring, dedupe keys, template rendering, the AI fact guard, status transitions, send limits and windows, warm-up, schedule validation, and the OpenAPI document.
+- **Integration test** (`apps/api/src/integration/full-run.int.test.ts`) runs a whole campaign against a real PostgreSQL database named `leadforge_test` (dropped and recreated on every run, so it never touches your dev data) with mocked places, AI and email providers. It checks: discovery and dedupe, every audit outcome, scoring, drafts that cite real website issues and carry the unsubscribe link and address, idempotent re-runs, no second run while one is active, sending within limits, a bounce and an unsubscribe permanently blocking a lead, follow-ups that skip leads who replied, bounced or unsubscribed, and the required reason and project details when closing or confirming a lead.
+
+## API documentation
+
+Interactive docs are served by the API at **http://localhost:4000/docs**, and the raw OpenAPI 3 document at **http://localhost:4000/openapi.json**. Sign in with `POST /api/v1/auth/login` (session cookie); the campaign trigger endpoint uses the automation key instead (`x-api-key`). Public endpoints (unsubscribe pages, provider webhooks) are marked as needing no authentication.
 
 ## Troubleshooting
 
@@ -252,4 +260,19 @@ An integration test for a full run with mocked providers, and generated OpenAPI 
 
 ## Docker
 
-`docker-compose.yml` also defines `api`, `worker` and `web` services (`docker compose up --build`). Day-to-day development uses `make dev`; the images are provided for deployment and have not been run in production yet.
+`docker-compose.yml` defines the whole stack: `postgres`, `redis`, `api`, `worker` and `web`. The API, worker and web images have been built and run: the API applies migrations on start, answers `/health`, `/ready` and `/docs`, signs in and serves data, and the worker registers its queues and schedules.
+
+```bash
+cp .env.example .env
+docker compose up --build        # web on :3000, API on :4000
+# first run only: load the demo workspace and login
+docker compose exec api pnpm --filter @leadforge/api exec tsx prisma/seed.ts
+```
+
+Notes:
+
+- The compose services read `.env` and override only `DATABASE_URL` and `REDIS_URL` so they reach the containers by name.
+- The browser talks to the API at the address baked into the web image at build time (`NEXT_PUBLIC_API_URL`, default `http://localhost:4000`). To deploy somewhere else, build with `docker compose build --build-arg NEXT_PUBLIC_API_URL=https://api.example.com web` and set `API_PUBLIC_URL` and `WEB_PUBLIC_URL` to your real addresses.
+- Docker's env-file loader keeps trailing `# comments` as part of a value, so keep comments on their own line in `.env` (the provided `.env.example` does).
+- Day-to-day development uses `make dev`, which runs the apps on your machine and only the databases in Docker.
+- The compose files have not been used for a production deployment. Before exposing the app publicly, change `JWT_SECRET`, `CREDENTIALS_KEY` and the demo password, serve both apps over HTTPS, and put Postgres and Redis on private networks.

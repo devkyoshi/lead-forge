@@ -22,7 +22,7 @@ export const campaignCreateSchema = z.object({
   name: z.string().min(1).max(120),
   area: areaSchema,
   categories: z.array(z.string().min(1).max(60)).min(1).max(20),
-  templateId: z.string().optional(),
+  templateId: z.string().nullable().optional(),
   followupSequence: followupSequenceSchema.default([]),
   /** 5-field cron expression, e.g. "0 9 * * 1-5". Null/absent = manual runs only. */
   cron: z.string().trim().max(100).nullable().optional(),

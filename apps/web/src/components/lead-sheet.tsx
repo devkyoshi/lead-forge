@@ -10,6 +10,8 @@ import { ActivityTimeline } from "@/components/activity-timeline";
 import { NEEDS_DETAILS, StatusChangeDialog } from "@/components/status-change-dialog";
 import { StatusBadge, humanize } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -46,6 +48,8 @@ export function LeadSheet({
   const [pending, setPending] = useState<string | null>(null);
   const [emails, setEmails] = useState<EmailThread | null>(null);
   const [timelineKey, setTimelineKey] = useState(0);
+  const [team, setTeam] = useState<{ id: string; name: string }[]>([]);
+  const [tagInput, setTagInput] = useState("");
 
   const load = useCallback(async () => {
     if (!leadId) return;
@@ -93,6 +97,28 @@ export function LeadSheet({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erase failed");
     }
+  }
+
+  useEffect(() => {
+    api<{ items: { id: string; name: string }[] }>("/team").then((r) => setTeam(r.items)).catch(() => {});
+  }, []);
+
+  /** Saves tags or the assignee and updates the open sheet in place. */
+  async function updateLead(patch: { tags?: string[]; assignedTo?: string | null }) {
+    try {
+      await api(`/leads/${leadId}`, { method: "PATCH", json: patch });
+      setLead((l) => (l ? { ...l, ...patch } : l));
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    }
+  }
+
+  function addTag() {
+    const t = tagInput.trim();
+    if (!t || !lead || lead.tags.includes(t)) return setTagInput("");
+    updateLead({ tags: [...lead.tags, t] });
+    setTagInput("");
   }
 
   async function changeStatus(status: string, extra: Record<string, unknown> = {}) {
@@ -159,6 +185,51 @@ export function LeadSheet({
               </div>
               <div className="text-sm text-muted-foreground">
                 {[lead.phone, lead.category, lead.area].filter(Boolean).join(" · ")}
+              </div>
+
+              <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Assigned to</p>
+                  <Select value={lead.assignedTo ?? "none"} onValueChange={(v) => updateLead({ assignedTo: !v || v === "none" ? null : v })}>
+                    <SelectTrigger className="h-8 w-full bg-background">
+                      <SelectValue>{lead.assignedTo ? (team.find((t) => t.id === lead.assignedTo)?.name ?? "Unknown") : "Unassigned"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {team.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Tags</p>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {lead.tags.map((t) => (
+                      <span key={t} className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-accent-foreground">
+                        {t}
+                        <button type="button" aria-label={`Remove tag ${t}`} className="rounded-full hover:text-destructive" onClick={() => updateLead({ tags: lead.tags.filter((x) => x !== t) })}>
+                          <X className="size-3" />
+                        </button>
+                      </span>
+                    ))}
+                    <Input
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addTag();
+                        }
+                      }}
+                      onBlur={addTag}
+                      placeholder={lead.tags.length ? "Add tag" : "Add a tag and press Enter"}
+                      className="h-7 w-36 bg-background text-xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <Tabs defaultValue="audit">

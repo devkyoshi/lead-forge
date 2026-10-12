@@ -44,6 +44,7 @@ export interface Lead {
   status: string;
   score: number;
   tags: string[];
+  assignedTo?: string | null;
   createdAt: string;
   contacts?: { value: string }[];
   needsManualOutreach?: boolean;

@@ -9,9 +9,9 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Mail, Plus, Search, Star, Users, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, Mail, Plus, Search, Star, Tag, Users, X } from "lucide-react";
 import { LEAD_STATUSES } from "@leadforge/shared";
-import { api, type Lead } from "@/lib/api";
+import { api, ApiError, type Campaign, type Lead } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import { StatusBadge, humanize } from "@/components/status-badge";
 import { ScoreBadge } from "@/components/score-badge";
 import { EmptyState } from "@/components/empty-state";
 import { DataTableShell } from "@/components/data-table-shell";
+import { NEEDS_DETAILS, StatusChangeDialog, type StatusExtra } from "@/components/status-change-dialog";
 
 interface ListResponse {
   total: number;
@@ -46,18 +47,41 @@ export default function LeadsPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [websiteStatus, setWebsiteStatus] = useState("all");
+  const [campaignId, setCampaignId] = useState("all");
+  const [category, setCategory] = useState("all");
+  const [minScore, setMinScore] = useState("any");
+  const [tagFilter, setTagFilter] = useState("");
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [bulkTag, setBulkTag] = useState("");
+  const [bulkStatus, setBulkStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<{ items: Campaign[] }>("/campaigns").then((r) => setCampaigns(r.items)).catch(() => {});
+  }, []);
+  const categories = useMemo(() => [...new Set(campaigns.flatMap((c) => c.categories))].sort(), [campaigns]);
+
+  /** The active filters as a query string, shared by the table and the CSV export. */
+  const filterParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (status !== "all") params.set("status", status);
+    if (websiteStatus !== "all") params.set("websiteStatus", websiteStatus);
+    if (campaignId !== "all") params.set("campaignId", campaignId);
+    if (category !== "all") params.set("category", category);
+    if (minScore !== "any") params.set("minScore", minScore);
+    if (tagFilter.trim()) params.set("tag", tagFilter.trim());
+    return params;
+  }, [q, status, websiteStatus, campaignId, category, minScore, tagFilter]);
 
   const load = useCallback(async () => {
     setLoading(true);
     const sort = sorting[0];
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(PAGE_SIZE),
-      sort: sort && SORTABLE.includes(sort.id) ? sort.id : "createdAt",
-      dir: sort?.desc === false ? "asc" : "desc",
-    });
-    if (q) params.set("q", q);
-    if (status !== "all") params.set("status", status);
+    const params = filterParams();
+    params.set("page", String(page));
+    params.set("pageSize", String(PAGE_SIZE));
+    params.set("sort", sort && SORTABLE.includes(sort.id) ? sort.id : "createdAt");
+    params.set("dir", sort?.desc === false ? "asc" : "desc");
     try {
       setData(await api<ListResponse>(`/leads?${params}`));
     } catch (e) {
@@ -65,7 +89,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, q, status, sorting]);
+  }, [page, filterParams, sorting]);
 
   useEffect(() => {
     const t = setTimeout(load, q ? 250 : 0);
@@ -83,6 +107,48 @@ export default function LeadsPage() {
       setPicked(new Set());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not queue emails");
+    }
+  }
+
+  async function bulk(body: Record<string, unknown>, done: string) {
+    try {
+      const res = await api<{ changed: number; skipped: { name?: string; reason: string }[] }>("/leads/bulk", {
+        method: "POST",
+        json: { ids: [...picked], ...body },
+      });
+      toast.success(`${res.changed} lead(s) ${done}`);
+      res.skipped.slice(0, 4).forEach((x) => toast.warning(`${x.name ?? "A lead"}: ${x.reason}`));
+      setBulkStatus(null);
+      setBulkTag("");
+      setPicked(new Set());
+      load();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Bulk action failed");
+    }
+  }
+
+  function startBulkStatus(next: string | null) {
+    if (!next) return;
+    if (NEEDS_DETAILS.includes(next)) setBulkStatus(next);
+    else bulk({ action: "set_status", status: next }, `moved to ${humanize(next)}`);
+  }
+
+  async function exportCsv() {
+    try {
+      const sort = sorting[0];
+      const params = filterParams();
+      params.set("sort", sort && SORTABLE.includes(sort.id) ? sort.id : "createdAt");
+      params.set("dir", sort?.desc === false ? "asc" : "desc");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/api/v1/leads/export.csv?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed");
     }
   }
 
@@ -138,7 +204,7 @@ export default function LeadsPage() {
   const from = total ? (page - 1) * PAGE_SIZE + 1 : 0;
   const to = Math.min(page * PAGE_SIZE, total);
   const colSpan = columns.length + 1;
-  const filtered = !!q || status !== "all";
+  const filtered = !!q || status !== "all" || websiteStatus !== "all" || campaignId !== "all" || category !== "all" || minScore !== "any" || !!tagFilter.trim();
 
   return (
     <>
@@ -146,9 +212,14 @@ export default function LeadsPage() {
         title="Leads"
         description="Businesses found by your campaigns, with website audit results and a score for how good a prospect each one is."
         actions={
-          <Button onClick={() => setAdding(true)}>
-            <Plus className="size-4" /> Add lead
-          </Button>
+          <>
+            <Button variant="outline" onClick={exportCsv}>
+              <Download className="size-4" /> Export CSV
+            </Button>
+            <Button onClick={() => setAdding(true)}>
+              <Plus className="size-4" /> Add lead
+            </Button>
+          </>
         }
       />
 
@@ -184,6 +255,54 @@ export default function LeadsPage() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={websiteStatus} onValueChange={(v) => { setWebsiteStatus(v ?? "all"); setPage(1); }}>
+          <SelectTrigger className="h-9 w-44">
+            <SelectValue>{websiteStatus === "all" ? "Any website" : humanize(websiteStatus)}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any website</SelectItem>
+            {["NO_WEBSITE", "SOCIAL_ONLY", "BROKEN", "POOR", "OK"].map((w) => (
+              <SelectItem key={w} value={w}>{humanize(w)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={campaignId} onValueChange={(v) => { setCampaignId(v ?? "all"); setPage(1); }}>
+          <SelectTrigger className="h-9 w-48">
+            <SelectValue>{campaignId === "all" ? "All campaigns" : (campaigns.find((c) => c.id === campaignId)?.name ?? "Campaign")}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All campaigns</SelectItem>
+            {campaigns.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.name} ({c.area.label})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={category} onValueChange={(v) => { setCategory(v ?? "all"); setPage(1); }}>
+          <SelectTrigger className="h-9 w-40">
+            <SelectValue>{category === "all" ? "All categories" : <span className="capitalize">{category}</span>}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c} value={c}><span className="capitalize">{c}</span></SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={minScore} onValueChange={(v) => { setMinScore(v ?? "any"); setPage(1); }}>
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue>{minScore === "any" ? "Any score" : `Score ${minScore}+`}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="any">Any score</SelectItem>
+            {["50", "70", "90"].map((n) => (
+              <SelectItem key={n} value={n}>Score {n}+</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative w-32">
+          <Tag className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Tag" className="h-9 pl-7" value={tagFilter} onChange={(e) => { setTagFilter(e.target.value); setPage(1); }} />
+        </div>
         {filtered && (
           <Button
             variant="ghost"
@@ -191,24 +310,50 @@ export default function LeadsPage() {
             onClick={() => {
               setQ("");
               setStatus("all");
+              setWebsiteStatus("all");
+              setCampaignId("all");
+              setCategory("all");
+              setMinScore("any");
+              setTagFilter("");
               setPage(1);
             }}
           >
             <X className="size-4" /> Clear filters
           </Button>
         )}
-        {picked.size > 0 && (
-          <div className="ml-auto flex items-center gap-2 rounded-lg border bg-brand-soft px-3 py-1.5 text-sm">
-            <span className="font-medium text-accent-foreground">{picked.size} selected</span>
-            <Button size="sm" onClick={queueEmails}>
-              <Mail className="size-4" /> Queue email
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setPicked(new Set())}>
-              Clear
-            </Button>
-          </div>
-        )}
       </div>
+
+      {picked.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-brand-soft px-4 py-2.5 text-sm">
+          <span className="font-medium text-accent-foreground">{picked.size} selected</span>
+          <Button size="sm" onClick={queueEmails}>
+            <Mail className="size-4" /> Queue email
+          </Button>
+          <Select value="" onValueChange={startBulkStatus}>
+            <SelectTrigger className="h-8 w-40 bg-background">
+              <SelectValue placeholder="Change status" />
+            </SelectTrigger>
+            <SelectContent>
+              {LEAD_STATUSES.filter((s) => !["UNSUBSCRIBED", "BOUNCED"].includes(s)).map((s) => (
+                <SelectItem key={s} value={s}>{humanize(s)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <form
+            className="flex items-center gap-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (bulkTag.trim()) bulk({ action: "add_tag", tag: bulkTag.trim() }, `tagged "${bulkTag.trim()}"`);
+            }}
+          >
+            <Input placeholder="Add tag" className="h-8 w-28 bg-background" value={bulkTag} onChange={(e) => setBulkTag(e.target.value)} />
+            <Button size="sm" variant="outline" type="submit" disabled={!bulkTag.trim()}>Tag</Button>
+          </form>
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setPicked(new Set())}>
+            Clear selection
+          </Button>
+        </div>
+      )}
 
       <DataTableShell>
         <Table>
@@ -303,6 +448,12 @@ export default function LeadsPage() {
         </div>
       </div>
 
+      <StatusChangeDialog
+        status={bulkStatus}
+        leadName={`${picked.size} leads`}
+        onCancel={() => setBulkStatus(null)}
+        onSubmit={(st, extra: StatusExtra) => bulk({ action: "set_status", status: st, ...extra }, `moved to ${humanize(st)}`)}
+      />
       <LeadSheet leadId={openId} onClose={() => setOpenId(null)} onChanged={load} />
       <AddLeadDialog open={adding} onOpenChange={setAdding} onCreated={load} />
     </>

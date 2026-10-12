@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
-import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import {
   leadCreateSchema,
@@ -15,6 +14,7 @@ import {
 import { prisma } from "../db.js";
 import { HttpError, changeLeadStatus, createLead } from "../services/leads.js";
 import { buildTimeline } from "../services/timeline.js";
+import { buildLeadWhere } from "../services/lead-query.js";
 
 const idParam = z.object({ id: z.string().min(1) });
 
@@ -30,26 +30,7 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
 
   r.get("/leads", { ...auth, schema: { querystring: leadListQuerySchema, tags: ["leads"] } }, async (req) => {
     const q = req.query;
-    const where: Prisma.LeadWhereInput = {
-      workspaceId: req.auth.workspaceId,
-      deletedAt: null,
-      ...(q.status?.length ? { status: { in: q.status } } : {}),
-      ...(q.websiteStatus ? { websiteStatus: q.websiteStatus } : {}),
-      ...(q.category ? { category: q.category } : {}),
-      ...(q.area ? { area: q.area } : {}),
-      ...(q.tag ? { tags: { has: q.tag } } : {}),
-      ...(q.campaignId ? { campaignId: q.campaignId } : {}),
-      ...(q.minScore !== undefined ? { score: { gte: q.minScore } } : {}),
-      ...(q.q
-        ? {
-            OR: [
-              { name: { contains: q.q, mode: "insensitive" } },
-              { address: { contains: q.q, mode: "insensitive" } },
-              { phone: { contains: q.q } },
-            ],
-          }
-        : {}),
-    };
+    const where = buildLeadWhere(req.auth.workspaceId, q);
     const [total, items] = await Promise.all([
       prisma.lead.count({ where }),
       prisma.lead.findMany({

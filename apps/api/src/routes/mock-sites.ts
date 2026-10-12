@@ -17,7 +17,7 @@ function poor(slug: string) {
 
 /** Offline stand-ins for business websites, used only by the mock places provider. */
 export const mockSiteRoutes: FastifyPluginAsync = async (app) => {
-  app.get<{ Params: { kind: string; slug: string } }>("/mock-sites/:kind/:slug", async (req, reply) => {
+  app.get<{ Params: { kind: string; slug: string } }>("/mock-sites/:kind/:slug", { schema: { hide: true } }, async (req, reply) => {
     const { kind, slug } = req.params;
     reply.type("text/html");
     if (kind === "poor") {
@@ -28,7 +28,7 @@ export const mockSiteRoutes: FastifyPluginAsync = async (app) => {
     return good(slug);
   });
 
-  app.get<{ Params: { kind: string; slug: string } }>("/mock-sites/:kind/:slug/contact", async (req, reply) => {
+  app.get<{ Params: { kind: string; slug: string } }>("/mock-sites/:kind/:slug/contact", { schema: { hide: true } }, async (req, reply) => {
     reply.type("text/html");
     // The poor site only reveals its email on the contact page, exercising enrichment.
     return req.params.kind === "poor"

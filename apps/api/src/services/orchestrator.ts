@@ -6,6 +6,7 @@ import { createAiProvider } from "../providers/ai.js";
 import { resolveSecret } from "../lib/secrets.js";
 import { auditStage, discoverStage, draftStage, enrichStage, scoreStage, type StageCtx, type StageResult } from "./stages.js";
 import type { AiProvider } from "../providers/ai.js";
+import type { EnrichmentProvider } from "../providers/enrichment.js";
 
 class RunCancelled extends Error {}
 
@@ -16,7 +17,7 @@ type StageFn = (ctx: StageCtx) => Promise<StageResult>;
  * run_stage_logs is skipped, so a retried/resumed job continues where it stopped. Each stage
  * only touches leads that still need that stage's work, so re-running is safe.
  */
-export async function executeRun(runId: string, deps: { places?: PlacesProvider; ai?: AiProvider } = {}) {
+export async function executeRun(runId: string, deps: { places?: PlacesProvider; ai?: AiProvider; enrichment?: EnrichmentProvider } = {}) {
   const run = await prisma.campaignRun.findUnique({ where: { id: runId }, include: { campaign: true, stages: true } });
   if (!run) throw new Error(`Run ${runId} not found`);
   if (run.status === "CANCELLED" || run.status === "COMPLETED") return;
@@ -31,7 +32,7 @@ export async function executeRun(runId: string, deps: { places?: PlacesProvider;
   const stageFns: Record<RunStage, StageFn> = {
     discover: (c) => discoverStage(c, places),
     audit: auditStage,
-    enrich: enrichStage,
+    enrich: (c) => enrichStage(c, deps.enrichment),
     score: scoreStage,
     draft: async (c) => draftStage(c, deps.ai ?? createAiProvider(await resolveSecret(c.workspaceId, "ANTHROPIC"))),
   };

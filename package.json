@@ -9,6 +9,7 @@
     "dev:web": "pnpm --filter @leadforge/web dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "test:int": "pnpm --filter @leadforge/api test:int",
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "pnpm --filter @leadforge/api db:migrate",
     "db:seed": "pnpm --filter @leadforge/api db:seed"

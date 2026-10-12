@@ -25,7 +25,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     });
   }
 
-  r.post("/auth/register", { schema: { body: registerSchema, tags: ["auth"] } }, async (req, reply) => {
+  r.post("/auth/register", { schema: { body: registerSchema, tags: ["auth"], security: [], description: "Creates the first user and workspace. Closed once a user exists." } }, async (req, reply) => {
     const { email, password, name, workspaceName } = req.body;
     // Single workspace to start: only the first user may self-register.
     if ((await prisma.user.count()) > 0) throw new HttpError(403, "Registration is closed");
@@ -41,7 +41,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return { id: user.id, email: user.email, name: user.name, workspaceId: user.workspaceId };
   });
 
-  r.post("/auth/login", { schema: { body: loginSchema, tags: ["auth"] } }, async (req, reply) => {
+  r.post("/auth/login", { schema: { body: loginSchema, tags: ["auth"], security: [] } }, async (req, reply) => {
     const user = await prisma.user.findUnique({ where: { email: req.body.email.toLowerCase() } });
     if (!user || !(await argon2.verify(user.passwordHash, req.body.password))) {
       throw new HttpError(401, "Invalid email or password");

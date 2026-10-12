@@ -18,6 +18,7 @@ import { prisma } from "./db.js";
 import { HttpError } from "./services/leads.js";
 import { authRoutes } from "./routes/auth.js";
 import { leadRoutes } from "./routes/leads.js";
+import { leadBulkRoutes } from "./routes/leads-bulk.js";
 import { campaignRoutes } from "./routes/campaigns.js";
 import { mockSiteRoutes } from "./routes/mock-sites.js";
 import { templateRoutes } from "./routes/templates.js";
@@ -70,7 +71,39 @@ export async function buildApp() {
     cookie: { cookieName: COOKIE_NAME, signed: false },
   });
   await app.register(swagger, {
-    openapi: { info: { title: "LeadForge API", version: "0.1.0" } },
+    openapi: {
+      info: {
+        title: "LeadForge API",
+        version: "0.1.0",
+        description:
+          "Local-business lead generation and outreach. Sign in with POST /api/v1/auth/login (session cookie), or use an automation API key (x-api-key) for the trigger endpoint. All data is scoped to the signed-in workspace.",
+      },
+      servers: [{ url: env.API_PUBLIC_URL }],
+      tags: [
+        { name: "auth", description: "Sign in, sign out and the current user" },
+        { name: "leads", description: "Leads, notes, checklist, timeline, bulk actions and CSV export" },
+        { name: "campaigns", description: "Campaign definitions, schedules and run control" },
+        { name: "runs", description: "Campaign run progress, cancel and resume" },
+        { name: "templates", description: "Email templates, versions, preview and test send" },
+        { name: "drafts", description: "Drafted emails and the approval queue" },
+        { name: "sending", description: "Send dispatcher status and manual trigger" },
+        { name: "pipeline", description: "Kanban board data" },
+        { name: "dashboard", description: "Funnel, send volume, runs and template performance" },
+        { name: "settings", description: "Workspace settings, scoring, credentials and API key" },
+        { name: "suppression", description: "Addresses and domains that are never emailed" },
+        { name: "compliance", description: "Data deletion" },
+        { name: "trigger", description: "Start a campaign run from automation (x-api-key)" },
+        { name: "public", description: "Unsubscribe pages and provider webhooks (no session)" },
+        { name: "ops", description: "Health checks" },
+      ],
+      components: {
+        securitySchemes: {
+          cookieAuth: { type: "apiKey", in: "cookie", name: COOKIE_NAME, description: "Session cookie set by POST /api/v1/auth/login" },
+          apiKeyAuth: { type: "apiKey", in: "header", name: "x-api-key", description: "Workspace automation key (Settings > API keys)" },
+        },
+      },
+      security: [{ cookieAuth: [] }],
+    },
     transform: jsonSchemaTransform,
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
@@ -100,9 +133,10 @@ export async function buildApp() {
     return reply.status(500).send({ error: "Internal server error" });
   });
 
-  app.get("/health", async () => ({ ok: true }));
+  app.get("/openapi.json", { schema: { hide: true } }, async () => app.swagger());
+  app.get("/health", { schema: { tags: ["ops"], security: [] } }, async () => ({ ok: true }));
   if (env.PLACES_PROVIDER === "mock") await app.register(mockSiteRoutes);
-  app.get("/ready", async () => {
+  app.get("/ready", { schema: { tags: ["ops"], security: [] } }, async () => {
     await prisma.$queryRaw`SELECT 1`;
     return { ok: true };
   });
@@ -112,6 +146,7 @@ export async function buildApp() {
   await app.register(
     async (api) => {
       await api.register(authRoutes);
+      await api.register(leadBulkRoutes);
       await api.register(leadRoutes);
       await api.register(campaignRoutes);
       await api.register(templateRoutes);

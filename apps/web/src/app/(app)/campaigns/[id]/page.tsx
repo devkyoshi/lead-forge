@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { History, Users } from "lucide-react";
+import { History, Pencil, Users } from "lucide-react";
 import { api, type Campaign, type Run } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { SchedulePicker, describeCron, browserTimezone, type Schedule } from "@/components/schedule-picker";
+import { CampaignDialog } from "@/components/campaign-dialog";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge, humanize } from "@/components/status-badge";
 
@@ -19,12 +20,16 @@ export default function CampaignDetail({ params }: { params: Promise<{ id: strin
   const [c, setC] = useState<Campaign | null>(null);
   const [schedule, setSchedule] = useState<Schedule>({ cron: null, timezone: browserTimezone() });
   const [saving, setSaving] = useState(false);
-  useEffect(() => {
+  const [editing, setEditing] = useState(false);
+  const load = useCallback(() => {
     api<Campaign>(`/campaigns/${id}`).then((x) => {
       setC(x);
       setSchedule({ cron: x.cron, timezone: x.cron ? x.timezone : browserTimezone() });
     });
   }, [id]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function saveSchedule() {
     setSaving(true);
@@ -56,6 +61,9 @@ export default function CampaignDetail({ params }: { params: Promise<{ id: strin
         actions={
           <>
             <StatusBadge status={c.status} />
+            <Button variant="outline" onClick={() => setEditing(true)}>
+              <Pencil className="size-4" /> Edit
+            </Button>
             <Button variant="outline" nativeButton={false} render={<Link href="/leads" />}>
               <Users className="size-4" /> View leads
             </Button>
@@ -126,6 +134,7 @@ export default function CampaignDetail({ params }: { params: Promise<{ id: strin
           )}
         </CardContent>
       </Card>
+      <CampaignDialog open={editing} onOpenChange={setEditing} onSaved={load} campaign={c} />
     </>
   );
 }
