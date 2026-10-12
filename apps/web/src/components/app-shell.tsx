@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { api, type Me } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { DevMenu } from "@/components/dev-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sidebar,
@@ -108,6 +109,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <SidebarInset>
         <header className="flex h-12 items-center gap-2 border-b px-4">
           <SidebarTrigger />
+          <div className="ml-auto">
+            <DevMenu />
+          </div>
         </header>
         <div className="p-4 md:p-6">{children}</div>
       </SidebarInset>
